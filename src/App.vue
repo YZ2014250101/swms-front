@@ -2,7 +2,7 @@
   <!-- 顶部导航菜单 -->
   <nav class="nav-bar">
     <!-- router-link 代替a标签，点击不会整页刷新 -->
-    <router-link to="/myinfo">个人信息</router-link>
+    <router-link to="/info">个人信息</router-link>
     <router-link to="/schedule">我的课表</router-link>
   </nav>
 

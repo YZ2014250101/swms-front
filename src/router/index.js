@@ -15,7 +15,7 @@ const routes = [
   },
   // 个人信息页面
   {
-    path: '/myinfo',
+    path: '/info',
     component: MyInfo
   },
   // 我的课表页面
