@@ -3,15 +3,15 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 // 导入我们即将创建的两个页面组件
-import MyInfo from '../views/MyInfo.vue'
-import MySchedule from '../views/MySchedule.vue'
-
+import MyInfo from '../views/student/MyInfo.vue'
+import MySchedule from '../views/student/MySchedule.vue'
+import Login from '../views/login/Login.vue'
 // 路由表：路径 <=> 页面组件映射
 const routes = [
   // 访问根地址，自动跳转到个人信息页
   {
     path: '/',
-    redirect: '/myinfo'
+    component: Login
   },
   // 个人信息页面
   {
@@ -34,3 +34,23 @@ const router = createRouter({
 
 // 导出路由给main.js使用
 export default router
+
+router.beforeEach((to, from, next) => {
+  const token = localStorage.getItem('token')
+  const userInfoStr = localStorage.getItem('userInfo')
+
+  // 未登录强制跳登录页
+  if (!token || !userInfoStr) {
+    return to.path === '/login' ? next() : next('/login')
+  }
+
+  const user = JSON.parse(userInfoStr)
+  const role = user.role
+
+  // 权限拦截
+  if (to.path.startsWith('/admin') && role !== 'admin') return next('/login')
+  if (to.path.startsWith('/teacher') && role !== 'teacher') return next('/login')
+  if (to.path.startsWith('/student') && role !== 'student') return next('/login')
+
+  next()
+})

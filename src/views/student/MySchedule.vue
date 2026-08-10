@@ -38,8 +38,8 @@
           </td>
           <!-- 循环周一到周日 weekDay 1~7 -->
           <td v-for="day in 7" :key="day" class="course-cell">
-            <!-- scheduleMap[星期][节次] 拿到课程对象 -->
-            <div v-if="scheduleMap[day] && scheduleMap[day][section]" class="course-box">
+            <!-- 可选链?. 防止层级为空报错 -->
+            <div v-if="scheduleMap[day]?.[section]" class="course-box">
               <div class="name">{{ scheduleMap[day][section].courseName }}</div>
               <div class="room">{{ scheduleMap[day][section].classroom }}</div>
               <div class="teacher">{{ scheduleMap[day][section].teacherName }}</div>
@@ -66,7 +66,7 @@
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
 
-// 查询周次
+// 查询周次，挂载后赋值为当前周
 const queryWeek = ref('')
 // 所有后端返回的数据容器
 const validWeeks = ref([])
@@ -86,9 +86,24 @@ const getScheduleData = async () => {
     if (queryWeek.value) {
       params.week = queryWeek.value
     }
-    const res = await axios.get('/api/student/mySchedule', { params })
-    const data = res.data.data
+    const res = await axios.get('/api/student/mySchedule', {
+      params,
+      // 全局携带Token鉴权，和个人信息页统一
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`
+      }
+    })
+    // 后端统一返回格式判断
+    if (res.data.code !== 200) {
+      alert(res.data.msg || '获取课表失败')
+      // 未登录跳转登录页
+      if (res.data.code === 401) {
+        location.href = '/login'
+      }
+      return
+    }
 
+    const data = res.data.data
     // 解构赋值绑定页面变量
     validWeeks.value = data.validWeeks
     sectionTimeMap.value = data.sectionTimeMap
@@ -96,11 +111,20 @@ const getScheduleData = async () => {
     currentWeek.value = data.currentWeek
     hasSchedules.value = data.hasSchedules
     selectedCourses.value = data.selectedCourses
+
+    // 首次加载默认选中当前周
+    if (!queryWeek.value) {
+      queryWeek.value = data.currentWeek
+    }
   } catch (err) {
     console.error('请求课表失败', err)
-    // 401未登录跳登录页（后续JWT登录用）
-    if (err.response?.data?.code === 401) {
-      alert('请先登录系统')
+    // 捕获网络异常、401等
+    const code = err.response?.data?.code
+    if (code === 401) {
+      alert('登录已过期，请重新登录')
+      location.href = '/login'
+    } else {
+      alert('网络请求异常，请稍后重试')
     }
   } finally {
     loading.value = false
@@ -125,9 +149,12 @@ onMounted(() => {
 .week-select select {
   padding: 4px 8px;
   margin: 0 10px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
 }
 .tip {
   color: #666;
+  margin-left: 12px;
 }
 .loading, .empty {
   font-size: 18px;
@@ -143,11 +170,13 @@ onMounted(() => {
   background: #165DFF;
   color: #fff;
   padding: 10px;
+  font-size: 15px;
 }
 .section-num {
   background: #f5f7fa;
   width: 80px;
   font-size: 14px;
+  text-align: center;
 }
 .course-cell {
   height: 80px;
@@ -170,7 +199,12 @@ onMounted(() => {
   border: 1px solid #eee;
   border-radius: 8px;
 }
+.course-list h3 {
+  margin-top: 0;
+  color: #333;
+}
 .course-list li {
   line-height: 2.2;
+  list-style: inside disc;
 }
 </style>
