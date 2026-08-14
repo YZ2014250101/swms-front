@@ -34,15 +34,35 @@
 </template>
 
 <script setup>
-import { reactive } from 'vue'
+import { reactive, ref, onMounted } from 'vue'
+import { getOverview } from '@/api/modules/admin/statistics'
 
-// TODO: 对接后端首页统计接口
+const loading = ref(false)
 const cards = reactive([
   { title: '学生人数', value: 0, icon: 'User', color: '#409eff' },
   { title: '教师人数', value: 0, icon: 'UserFilled', color: '#67c23a' },
   { title: '课程数量', value: 0, icon: 'Reading', color: '#e6a23c' },
-  { title: '班级数量', value: 0, icon: 'OfficeBuilding', color: '#f56c6c' }
+  { title: '选课率', value: '0%', icon: 'TrendCharts', color: '#f56c6c' }
 ])
+
+async function loadOverview() {
+  loading.value = true
+  try {
+    const res = await getOverview()
+    const data = res.data || {}
+    cards[0].value = data.studentCount ?? 0
+    cards[1].value = data.teacherCount ?? 0
+    cards[2].value = data.courseCount ?? 0
+    const rate = Number(data.selectionRate)
+    cards[3].value = isNaN(rate) ? '0%' : `${rate}%`
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadOverview)
 </script>
 
 <style scoped>

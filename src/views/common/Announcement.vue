@@ -38,10 +38,10 @@ const tableData = ref([])
 async function loadData() {
   loading.value = true
   try {
-    // TODO: 对接后端
-    // const res = await getAnnouncementList()
-    // tableData.value = res.data
-    tableData.value = []
+    // 按角色调对应公告列表接口
+    // 返回 {announcementList, tab?}
+    const res = await getAnnouncementList(userStore.role)
+    tableData.value = res.data?.announcementList || []
   } catch (err) {
     console.error(err)
   } finally {

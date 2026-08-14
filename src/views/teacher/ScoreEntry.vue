@@ -13,18 +13,28 @@
       </el-form-item>
     </el-form>
 
-    <el-table :data="tableData" border stripe style="width: 100%">
+    <!-- 成绩录入未开放提示 -->
+    <el-alert
+      v-if="!gradeInputAllowed && queryForm.courseId"
+      :title="gradeInputMsg || '当前课程成绩录入未开放'"
+      type="warning"
+      show-icon
+      :closable="false"
+      style="margin-bottom: 12px"
+    />
+
+    <el-table :data="tableData" border stripe style="width: 100%" v-loading="loading">
       <el-table-column prop="studentNo" label="学号" width="130" />
       <el-table-column prop="name" label="姓名" width="110" />
       <el-table-column prop="className" label="班级" width="160" />
       <el-table-column label="平时成绩" width="160" align="center">
         <template #default="{ row }">
-          <el-input-number v-model="row.usualScore" :min="0" :max="100" :precision="1" controls-position="right" size="small" style="width: 120px" />
+          <el-input-number v-model="row.dailyScore" :min="0" :max="100" :precision="1" :disabled="!gradeInputAllowed" controls-position="right" size="small" style="width: 120px" />
         </template>
       </el-table-column>
       <el-table-column label="期末成绩" width="160" align="center">
         <template #default="{ row }">
-          <el-input-number v-model="row.examScore" :min="0" :max="100" :precision="1" controls-position="right" size="small" style="width: 120px" />
+          <el-input-number v-model="row.finalScore" :min="0" :max="100" :precision="1" :disabled="!gradeInputAllowed" controls-position="right" size="small" style="width: 120px" />
         </template>
       </el-table-column>
       <el-table-column label="综合成绩" width="120" align="center">
@@ -36,13 +46,13 @@
       </el-table-column>
       <el-table-column label="操作" width="100" align="center" fixed="right">
         <template #default="{ row }">
-          <el-button type="primary" link size="small" @click="handleSave(row)">保存</el-button>
+          <el-button type="primary" link size="small" :disabled="!gradeInputAllowed" @click="handleSave(row)">保存</el-button>
         </template>
       </el-table-column>
     </el-table>
 
     <div class="footer-bar">
-      <el-button type="success" :icon="Check" @click="handleBatchSave">批量保存</el-button>
+      <el-button type="success" :icon="Check" :disabled="!gradeInputAllowed" @click="handleBatchSave">批量保存</el-button>
     </div>
   </el-card>
 </template>
@@ -52,55 +62,123 @@ import { ref, reactive } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Search, Check } from '@element-plus/icons-vue'
+import { getTeacherCourses } from '@/api/modules/teacher/course'
+import { gradeInput, saveGrade, batchSaveGrade } from '@/api/modules/teacher/score'
+import { onMounted } from 'vue'
 
 const route = useRoute()
 
 // 课程下拉
-// TODO: 对接后端 教师所授课程列表接口
-const courseOptions = ref([
-  { id: 1, courseName: '数据结构' },
-  { id: 2, courseName: '计算机网络' },
-  { id: 3, courseName: '软件工程' },
-  { id: 4, courseName: '高等数学' }
-])
+const courseOptions = ref([])
 
 const queryForm = reactive({
   courseId: route.query.courseId ? Number(route.query.courseId) : ''
 })
 
-// mock 学生成绩数据
-// TODO: 对接后端 成绩录入列表接口，参数 courseId
-const tableData = ref([
-  { id: 1, studentNo: '20230101', name: '张三', className: '计算机2301班', usualScore: 85, examScore: 78 },
-  { id: 2, studentNo: '20230102', name: '李四', className: '计算机2301班', usualScore: 90, examScore: 82 },
-  { id: 3, studentNo: '20230103', name: '王芳', className: '计算机2301班', usualScore: 78, examScore: 88 },
-  { id: 4, studentNo: '20230104', name: '刘洋', className: '计算机2301班', usualScore: 70, examScore: 55 },
-  { id: 5, studentNo: '20230105', name: '赵敏', className: '计算机2301班', usualScore: 92, examScore: 95 }
-])
+const loading = ref(false)
+const tableData = ref([])
+const gradeInputAllowed = ref(true)
+const gradeInputMsg = ref('')
 
 // 综合成绩 = 平时*0.3 + 期末*0.7
 const calcTotal = (row) => {
-  const total = (row.usualScore * 0.3 + row.examScore * 0.7)
+  const daily = Number(row.dailyScore) || 0
+  const final = Number(row.finalScore) || 0
+  const total = daily * 0.3 + final * 0.7
   return Math.round(total * 10) / 10
+}
+
+// 拉取课程下拉
+const fetchCourses = async () => {
+  try {
+    const res = await getTeacherCourses()
+    courseOptions.value = res.data?.courseList || []
+    if (queryForm.courseId) {
+      handleQuery()
+    }
+  } catch (e) {
+    // 拦截器已提示
+  }
+}
+
+// 拉取成绩录入数据
+const fetchGradeInput = async () => {
+  if (!queryForm.courseId) {
+    ElMessage.warning('请先选择课程')
+    return
+  }
+  loading.value = true
+  try {
+    const res = await gradeInput(queryForm.courseId)
+    const data = res.data || {}
+    // 兜底初始化 dailyScore/finalScore
+    const list = (data.studentList || []).map((item) => ({
+      ...item,
+      dailyScore: item.dailyScore ?? item.usualScore ?? 0,
+      finalScore: item.finalScore ?? item.examScore ?? 0
+    }))
+    tableData.value = list
+    gradeInputAllowed.value = data.gradeInputAllowed !== false
+    gradeInputMsg.value = data.gradeInputMsg || ''
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    loading.value = false
+  }
 }
 
 // 查询
 const handleQuery = () => {
-  // TODO: 对接后端 成绩录入列表接口
-  ElMessage.success('查询成功')
+  fetchGradeInput()
 }
 
 // 单条保存
-const handleSave = (row) => {
-  // TODO: 对接后端 单条成绩保存接口
-  ElMessage.success(`学生【${row.name}】成绩已保存，综合成绩：${calcTotal(row)}`)
+const handleSave = async (row) => {
+  if (!gradeInputAllowed.value) {
+    ElMessage.warning(gradeInputMsg.value || '成绩录入未开放')
+    return
+  }
+  try {
+    await saveGrade({
+      studentId: row.studentId || row.id,
+      courseId: queryForm.courseId,
+      dailyScore: row.dailyScore,
+      finalScore: row.finalScore
+    })
+    ElMessage.success(`学生【${row.name}】成绩已保存，综合成绩：${calcTotal(row)}`)
+    fetchGradeInput()
+  } catch (e) {
+    // 拦截器已提示
+  }
 }
 
 // 批量保存
-const handleBatchSave = () => {
-  // TODO: 对接后端 批量成绩保存接口
-  ElMessage.success(`已批量保存 ${tableData.value.length} 条成绩记录`)
+const handleBatchSave = async () => {
+  if (!gradeInputAllowed.value) {
+    ElMessage.warning(gradeInputMsg.value || '成绩录入未开放')
+    return
+  }
+  if (tableData.value.length === 0) {
+    ElMessage.warning('没有可保存的成绩记录')
+    return
+  }
+  try {
+    await batchSaveGrade({
+      studentIds: tableData.value.map((r) => r.studentId || r.id),
+      courseId: queryForm.courseId,
+      dailyScores: tableData.value.map((r) => r.dailyScore),
+      finalScores: tableData.value.map((r) => r.finalScore)
+    })
+    ElMessage.success(`已批量保存 ${tableData.value.length} 条成绩记录`)
+    fetchGradeInput()
+  } catch (e) {
+    // 拦截器已提示
+  }
 }
+
+onMounted(() => {
+  fetchCourses()
+})
 </script>
 
 <style scoped>

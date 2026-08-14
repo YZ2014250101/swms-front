@@ -38,18 +38,29 @@
 </template>
 
 <script setup>
-import { reactive } from 'vue'
+import { reactive, onMounted } from 'vue'
 import { useUserStore } from '@/store/modules/user'
+import { getMyCourses } from '@/api/modules/student/course'
 
 const userStore = useUserStore()
 
-// TODO: 对接后端首页统计接口
 const cards = reactive([
   { title: '已选课程', value: 0, icon: 'Notebook', color: '#409eff' },
   { title: '未读消息', value: 0, icon: 'Bell', color: '#e6a23c' },
   { title: '待交作业', value: 0, icon: 'Edit', color: '#f56c6c' },
   { title: '本周课时', value: 0, icon: 'Calendar', color: '#67c23a' }
 ])
+
+async function loadOverview() {
+  try {
+    const res = await getMyCourses()
+    cards[0].value = (res.data?.myCourseList || []).length
+  } catch (e) {
+    // 拦截器已提示
+  }
+}
+
+onMounted(loadOverview)
 </script>
 
 <style scoped>

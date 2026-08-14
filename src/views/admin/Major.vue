@@ -5,8 +5,8 @@
     <!-- 搜索栏 -->
     <el-form :inline="true" :model="searchForm" class="search-form">
       <el-form-item label="所属院系">
-        <el-select v-model="searchForm.deptId" placeholder="请选择院系" clearable>
-          <el-option v-for="item in deptOptions" :key="item.value" :label="item.label" :value="item.value" />
+        <el-select v-model="searchForm.departmentId" placeholder="请选择院系" clearable style="width: 180px">
+          <el-option v-for="item in deptList" :key="item.id" :label="item.name" :value="item.id" />
         </el-select>
       </el-form-item>
       <el-form-item label="专业名称">
@@ -24,11 +24,13 @@
     </div>
 
     <!-- 列表 -->
-    <el-table :data="tableData" border stripe style="width: 100%; margin-top: 16px">
-      <el-table-column prop="majorNo" label="专业编号" width="130" />
+    <el-table :data="filteredList" border stripe v-loading="loading" style="width: 100%; margin-top: 16px">
+      <el-table-column prop="code" label="专业编号" width="140" />
       <el-table-column prop="name" label="专业名称" min-width="180" />
-      <el-table-column prop="deptName" label="所属院系" width="160" />
-      <el-table-column prop="duration" label="学制" width="100" align="center" />
+      <el-table-column label="所属院系" width="180">
+        <template #default="{ row }">{{ deptName(row.departmentId) }}</template>
+      </el-table-column>
+      <el-table-column prop="description" label="描述" min-width="200" />
       <el-table-column label="操作" width="160" align="center" fixed="right">
         <template #default="{ row }">
           <el-button type="primary" link size="small" @click="handleEdit(row)">编辑</el-button>
@@ -42,7 +44,7 @@
       v-model:current-page="page.current"
       v-model:page-size="page.size"
       :page-sizes="[10, 20, 50]"
-      :total="page.total"
+      :total="filteredList.length"
       layout="total, sizes, prev, pager, next, jumper"
       background
     />
@@ -50,128 +52,148 @@
     <!-- 新增/编辑弹窗 -->
     <el-dialog v-model="dialogVisible" :title="editMode ? '编辑专业' : '新增专业'" width="480px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
-        <el-form-item label="专业编号" prop="majorNo">
-          <el-input v-model="form.majorNo" placeholder="请输入专业编号" :disabled="editMode" />
+        <el-form-item label="专业编号" prop="code">
+          <el-input v-model="form.code" placeholder="请输入专业编号" />
         </el-form-item>
         <el-form-item label="专业名称" prop="name">
           <el-input v-model="form.name" placeholder="请输入专业名称" />
         </el-form-item>
-        <el-form-item label="所属院系" prop="deptId">
-          <el-select v-model="form.deptId" placeholder="请选择所属院系" style="width: 100%">
-            <el-option v-for="item in deptOptions" :key="item.value" :label="item.label" :value="item.value" />
+        <el-form-item label="所属院系" prop="departmentId">
+          <el-select v-model="form.departmentId" placeholder="请选择所属院系" style="width: 100%">
+            <el-option v-for="item in deptList" :key="item.id" :label="item.name" :value="item.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="学制" prop="duration">
-          <el-select v-model="form.duration" placeholder="请选择学制" style="width: 100%">
-            <el-option label="三年制" :value="3" />
-            <el-option label="四年制" :value="4" />
-            <el-option label="五年制" :value="5" />
-          </el-select>
+        <el-form-item label="描述" prop="description">
+          <el-input v-model="form.description" type="textarea" :rows="3" placeholder="请输入专业描述" />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleConfirm">确认</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleConfirm">确认</el-button>
       </template>
     </el-dialog>
   </el-card>
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh, Plus } from '@element-plus/icons-vue'
+import { getMajorList, toAddMajor, addMajor, toEditMajor, updateMajor, deleteMajor } from '@/api/modules/admin/department'
 
-// 院系下拉
-// TODO: 对接后端 院系下拉列表接口
-const deptOptions = ref([
-  { value: 1, label: '计算机学院' },
-  { value: 2, label: '软件学院' },
-  { value: 3, label: '信息工程学院' }
-])
+const loading = ref(false)
+const submitting = ref(false)
+const tableData = ref([])
+const deptList = ref([])
 
-// mock 专业列表
-// TODO: 对接后端 专业列表接口
-const tableData = ref([
-  { id: 1, majorNo: 'M001', name: '计算机科学与技术', deptId: 1, deptName: '计算机学院', duration: 4 },
-  { id: 2, majorNo: 'M002', name: '软件工程', deptId: 2, deptName: '软件学院', duration: 4 },
-  { id: 3, majorNo: 'M003', name: '网络工程', deptId: 1, deptName: '计算机学院', duration: 4 },
-  { id: 4, majorNo: 'M004', name: '信息管理', deptId: 3, deptName: '信息工程学院', duration: 3 }
-])
+const deptName = (id) => {
+  const d = deptList.value.find((item) => item.id === id)
+  return d ? d.name : ''
+}
+
+const fetchList = async () => {
+  loading.value = true
+  try {
+    const res = await getMajorList()
+    tableData.value = res.data.majorList || []
+    deptList.value = res.data.deptList || []
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(fetchList)
 
 // 搜索
-const searchForm = reactive({ deptId: '', name: '' })
+const searchForm = reactive({ departmentId: '', name: '' })
+const filteredList = computed(() => {
+  return tableData.value.filter((row) => {
+    if (searchForm.departmentId && Number(row.departmentId) !== Number(searchForm.departmentId)) return false
+    if (searchForm.name && !(row.name || '').includes(searchForm.name)) return false
+    return true
+  })
+})
 const handleSearch = () => {
-  // TODO: 对接后端 专业列表查询接口
-  ElMessage.success('查询成功')
+  page.current = 1
 }
 const handleReset = () => {
-  searchForm.deptId = ''
+  searchForm.departmentId = ''
   searchForm.name = ''
 }
 
 // 分页
-const page = reactive({ current: 1, size: 10, total: 4 })
+const page = reactive({ current: 1, size: 10 })
 
 // 弹窗
 const dialogVisible = ref(false)
 const editMode = ref(false)
 const formRef = ref(null)
-const form = reactive({ id: null, majorNo: '', name: '', deptId: '', duration: '' })
+const form = reactive({ id: null, code: '', name: '', departmentId: '', description: '' })
 const rules = {
-  majorNo: [{ required: true, message: '请输入专业编号', trigger: 'blur' }],
   name: [{ required: true, message: '请输入专业名称', trigger: 'blur' }],
-  deptId: [{ required: true, message: '请选择所属院系', trigger: 'change' }],
-  duration: [{ required: true, message: '请选择学制', trigger: 'change' }]
+  departmentId: [{ required: true, message: '请选择所属院系', trigger: 'change' }]
 }
 
-const handleAdd = () => {
-  editMode.value = false
+const resetForm = () => {
   form.id = null
-  form.majorNo = ''
+  form.code = ''
   form.name = ''
-  form.deptId = ''
-  form.duration = ''
-  dialogVisible.value = true
+  form.departmentId = ''
+  form.description = ''
 }
 
-const handleEdit = (row) => {
+const handleAdd = async () => {
+  editMode.value = false
+  resetForm()
+  try {
+    const res = await toAddMajor()
+    deptList.value = res.data.deptList || deptList.value
+    dialogVisible.value = true
+  } catch (e) {
+    // 拦截器已提示
+  }
+}
+
+const handleEdit = async (row) => {
   editMode.value = true
-  form.id = row.id
-  form.majorNo = row.majorNo
-  form.name = row.name
-  form.deptId = row.deptId
-  form.duration = row.duration
-  dialogVisible.value = true
+  resetForm()
+  try {
+    const res = await toEditMajor(row.id)
+    const major = res.data.major || {}
+    deptList.value = res.data.deptList || deptList.value
+    form.id = major.id
+    form.code = major.code || ''
+    form.name = major.name || ''
+    form.departmentId = major.departmentId ?? ''
+    form.description = major.description || ''
+    dialogVisible.value = true
+  } catch (e) {
+    // 拦截器已提示
+  }
 }
 
 const handleConfirm = () => {
-  formRef.value.validate((valid) => {
+  formRef.value.validate(async (valid) => {
     if (!valid) return
-    const deptName = deptOptions.value.find((d) => d.value === form.deptId)?.label || ''
-    // TODO: 对接后端 专业新增/编辑接口
-    if (editMode.value) {
-      const row = tableData.value.find((item) => item.id === form.id)
-      if (row) {
-        row.majorNo = form.majorNo
-        row.name = form.name
-        row.deptId = form.deptId
-        row.deptName = deptName
-        row.duration = form.duration
+    submitting.value = true
+    try {
+      const payload = { code: form.code, name: form.name, departmentId: form.departmentId, description: form.description }
+      if (editMode.value) {
+        await updateMajor({ id: form.id, ...payload })
+        ElMessage.success('编辑成功')
+      } else {
+        await addMajor(payload)
+        ElMessage.success('新增成功')
       }
-      ElMessage.success('编辑成功')
-    } else {
-      tableData.value.unshift({
-        id: Date.now(),
-        majorNo: form.majorNo,
-        name: form.name,
-        deptId: form.deptId,
-        deptName,
-        duration: form.duration
-      })
-      ElMessage.success('新增成功')
+      dialogVisible.value = false
+      fetchList()
+    } catch (e) {
+      // 拦截器已提示
+    } finally {
+      submitting.value = false
     }
-    dialogVisible.value = false
   })
 }
 
@@ -182,11 +204,12 @@ const handleDelete = (row) => {
     cancelButtonText: '取消',
     type: 'warning'
   })
-    .then(() => {
-      // TODO: 对接后端 专业删除接口
-      const idx = tableData.value.findIndex((item) => item.id === row.id)
-      if (idx !== -1) tableData.value.splice(idx, 1)
-      ElMessage.success('删除成功')
+    .then(async () => {
+      try {
+        await deleteMajor(row.id)
+        ElMessage.success('删除成功')
+        fetchList()
+      } catch (e) {}
     })
     .catch(() => {})
 }

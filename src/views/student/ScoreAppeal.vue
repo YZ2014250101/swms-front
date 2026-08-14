@@ -1,24 +1,36 @@
 <!-- src/views/student/ScoreAppeal.vue -->
-<!-- 成绩异议申诉，查看历史申诉并提交新申诉 -->
+<!-- 成绩异议申诉，查看历史成绩并提交申诉 -->
+<!-- 接口：getGradeHistory / toAppeal / submitAppeal（@/api/modules/student/score） -->
 <template>
   <el-card shadow="never">
-    <!-- 顶部选课程 -->
     <div class="filter-bar">
-      <span class="label">选择课程：</span>
-      <el-select v-model="selectedCourse" placeholder="请选择课程" clearable style="width: 260px" @change="handleCourseChange">
-        <el-option v-for="item in courseList" :key="item.id" :label="item.courseName" :value="item.id" />
-      </el-select>
-      <el-button type="primary" :icon="Plus" class="appeal-btn" @click="handleOpenAppeal">提交申诉</el-button>
+      <span class="title">成绩申诉</span>
+      <span class="hint">如对成绩有异议，可点击对应成绩行的"申诉"按钮提交申诉</span>
     </div>
 
-    <!-- 历史申诉记录 -->
-    <el-table :data="tableData" border stripe style="width: 100%; margin-top: 16px">
-      <el-table-column prop="courseName" label="课程" width="160" />
-      <el-table-column prop="content" label="申诉内容" min-width="240" show-overflow-tooltip />
-      <el-table-column prop="appealTime" label="申诉时间" width="170" />
-      <el-table-column label="状态" width="110" align="center">
+    <!-- 成绩列表（含申诉状态） -->
+    <el-table :data="pagedData" v-loading="loading" border stripe style="width: 100%; margin-top: 16px">
+      <el-table-column prop="courseNo" label="课程编号" width="120" />
+      <el-table-column prop="courseName" label="课程名称" min-width="160" />
+      <el-table-column prop="credit" label="学分" width="80" align="center" />
+      <el-table-column prop="dailyScore" label="平时成绩" width="100" align="center" />
+      <el-table-column prop="finalScore" label="期末成绩" width="100" align="center" />
+      <el-table-column prop="totalScore" label="综合成绩" width="100" align="center" />
+      <el-table-column label="申诉状态" width="110" align="center">
         <template #default="{ row }">
-          <el-tag :type="statusTagType(row.status)">{{ row.status }}</el-tag>
+          <el-tag :type="appealTagType(row.appealStatus)">{{ appealStatusText(row.appealStatus) }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="操作" width="120" align="center" fixed="right">
+        <template #default="{ row }">
+          <el-button
+            v-if="canAppeal(row)"
+            type="primary"
+            link
+            size="small"
+            @click="handleOpenAppeal(row)"
+          >申诉</el-button>
+          <span v-else>-</span>
         </template>
       </el-table-column>
     </el-table>
@@ -27,129 +39,154 @@
       style="margin-top: 16px; justify-content: flex-end"
       v-model:current-page="page.current"
       v-model:page-size="page.size"
-      :total="page.total"
+      :total="gradeList.length"
       layout="total, prev, pager, next"
     />
 
     <!-- 提交申诉弹窗 -->
-    <el-dialog v-model="dialogVisible" title="提交成绩申诉" width="520px">
-      <el-form :model="appealForm" label-width="90px" ref="appealFormRef" :rules="rules">
-        <el-form-item label="选择课程" prop="courseId">
-          <el-select v-model="appealForm.courseId" placeholder="请选择课程" style="width: 100%">
-            <el-option v-for="item in courseList" :key="item.id" :label="item.courseName" :value="item.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="申诉理由" prop="reason">
-          <el-input
-            v-model="appealForm.reason"
-            type="textarea"
-            :rows="5"
-            placeholder="请详细描述申诉理由，例如对某题评分存在异议等"
-            maxlength="500"
-            show-word-limit
-          />
-        </el-form-item>
-      </el-form>
+    <el-dialog v-model="dialogVisible" title="提交成绩申诉" width="560px">
+      <div v-loading="appealLoading">
+        <el-descriptions v-if="gradeEcho" :column="2" border size="small" style="margin-bottom: 16px">
+          <el-descriptions-item label="课程">{{ gradeEcho.courseName }}</el-descriptions-item>
+          <el-descriptions-item label="学分">{{ gradeEcho.credit }}</el-descriptions-item>
+          <el-descriptions-item label="平时成绩">{{ gradeEcho.dailyScore }}</el-descriptions-item>
+          <el-descriptions-item label="期末成绩">{{ gradeEcho.finalScore }}</el-descriptions-item>
+          <el-descriptions-item label="综合成绩" :span="2">{{ gradeEcho.totalScore }}</el-descriptions-item>
+        </el-descriptions>
+        <el-form :model="appealForm" label-width="90px" ref="appealFormRef" :rules="rules">
+          <el-form-item label="申诉理由" prop="appealReason">
+            <el-input
+              v-model="appealForm.appealReason"
+              type="textarea"
+              :rows="5"
+              placeholder="请详细描述申诉理由，例如对某题评分存在异议等"
+              maxlength="500"
+              show-word-limit
+            />
+          </el-form-item>
+        </el-form>
+      </div>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmitAppeal">提交</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSubmitAppeal">提交</el-button>
       </template>
     </el-dialog>
   </el-card>
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { getGradeHistory, toAppeal, submitAppeal } from '@/api/modules/student/score'
 
-// 课程下拉
-// TODO: 对接后端 我的课程列表接口
-const courseList = ref([
-  { id: 1, courseName: '数据结构' },
-  { id: 2, courseName: '计算机网络' },
-  { id: 3, courseName: '软件工程' }
-])
-
-const selectedCourse = ref('')
+const loading = ref(false)
+const gradeList = ref([])
 
 const page = reactive({
   current: 1,
-  size: 10,
-  total: 3
+  size: 10
 })
 
-// mock 历史申诉记录
-// TODO: 对接后端 申诉记录查询接口
-const tableData = ref([
-  { id: 1, courseName: '数据结构', content: '期末考试第三大题第二小题评分有异议，本人答案与标准答案一致但未给分。', appealTime: '2025-07-01 10:20:30', status: '已通过' },
-  { id: 2, courseName: '计算机网络', content: '平时成绩记录有误，缺勤次数统计与实际不符。', appealTime: '2025-07-03 14:10:00', status: '待处理' },
-  { id: 3, courseName: '高等数学', content: '期末试卷总分核算有误，请复核。', appealTime: '2025-07-05 09:00:00', status: '已驳回' }
-])
+// 当前页数据
+const pagedData = computed(() => {
+  const start = (page.current - 1) * page.size
+  return gradeList.value.slice(start, start + page.size)
+})
 
-// 状态 tag 类型
-const statusTagType = (status) => {
-  if (status === '已通过') return 'success'
-  if (status === '待处理') return 'warning'
-  return 'danger'
+// 申诉状态文案
+const appealStatusText = (s) => {
+  const map = { 0: '未申诉', 1: '申诉中', 2: '已通过', 3: '已驳回' }
+  return map[s] ?? (s == null ? '未申诉' : s)
 }
+// 申诉状态 tag 类型
+const appealTagType = (s) => {
+  const map = { 0: 'info', 1: 'warning', 2: 'success', 3: 'danger' }
+  return map[s] ?? 'info'
+}
+// 是否可申诉（未申诉或已驳回可再次发起，具体以后端校验为准）
+const canAppeal = (row) => row.appealStatus == null || row.appealStatus === 0 || row.appealStatus === 3
 
-// 切换课程
-const handleCourseChange = () => {
-  // TODO: 对接后端 申诉记录查询接口
-  ElMessage.success('课程已切换')
+// 加载成绩历史
+const loadGrades = async () => {
+  loading.value = true
+  try {
+    const res = await getGradeHistory()
+    gradeList.value = res.data?.gradeList || []
+  } catch (err) {
+    console.error('获取成绩历史失败', err)
+  } finally {
+    loading.value = false
+  }
 }
 
 // 提交申诉弹窗
 const dialogVisible = ref(false)
+const appealLoading = ref(false)
+const submitting = ref(false)
 const appealFormRef = ref()
 const appealForm = reactive({
-  courseId: '',
-  reason: ''
+  gradeId: '',
+  appealReason: ''
 })
+const gradeEcho = ref(null)
 
 const rules = {
-  courseId: [{ required: true, message: '请选择课程', trigger: 'change' }],
-  reason: [{ required: true, message: '请输入申诉理由', trigger: 'blur' }]
+  appealReason: [{ required: true, message: '请输入申诉理由', trigger: 'blur' }]
 }
 
-const handleOpenAppeal = () => {
-  appealForm.courseId = ''
-  appealForm.reason = ''
+// 打开申诉弹窗，回显成绩
+const handleOpenAppeal = async (row) => {
+  appealForm.gradeId = row.id
+  appealForm.appealReason = ''
+  gradeEcho.value = null
   dialogVisible.value = true
+  appealLoading.value = true
+  try {
+    const res = await toAppeal(row.id)
+    gradeEcho.value = res.data?.grade || null
+  } catch (err) {
+    console.error('获取申诉成绩回显失败', err)
+  } finally {
+    appealLoading.value = false
+  }
 }
 
 // 提交申诉
 const handleSubmitAppeal = () => {
-  appealFormRef.value.validate((valid) => {
+  appealFormRef.value.validate(async (valid) => {
     if (!valid) return
-    // TODO: 对接后端 提交申诉接口
-    const course = courseList.value.find((item) => item.id === appealForm.courseId)
-    tableData.value.unshift({
-      id: Date.now(),
-      courseName: course ? course.courseName : '',
-      content: appealForm.reason,
-      appealTime: new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-'),
-      status: '待处理'
-    })
-    page.total += 1
-    dialogVisible.value = false
-    ElMessage.success('申诉已提交，请等待处理')
+    submitting.value = true
+    try {
+      await submitAppeal({ gradeId: appealForm.gradeId, appealReason: appealForm.appealReason })
+      ElMessage.success('申诉已提交，请等待处理')
+      dialogVisible.value = false
+      await loadGrades()
+    } catch (err) {
+      console.error('提交申诉失败', err)
+    } finally {
+      submitting.value = false
+    }
   })
 }
+
+onMounted(() => {
+  loadGrades()
+})
 </script>
 
 <style scoped>
 .filter-bar {
   display: flex;
   align-items: center;
+  gap: 16px;
 }
-.label {
-  font-size: 14px;
-  color: #606266;
-  margin-right: 8px;
+.filter-bar .title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
 }
-.appeal-btn {
-  margin-left: auto;
+.filter-bar .hint {
+  font-size: 13px;
+  color: #909399;
 }
 </style>

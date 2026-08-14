@@ -1,28 +1,22 @@
 // src/api/modules/common/notice.js
-// 公共消息通知接口
+// 消息通知接口：后端文档无消息通知接口，统一空实现
+// 后端暂无消息通知接口
 import request from '../../request'
 
-// 消息通知列表
-export function getNoticeList(params) {
-  return request({
-    url: '/common/notice/list',
-    method: 'get',
-    params
-  })
+// 后端暂无消息通知接口，返回空数据
+export function getNoticeList() {
+  // 后端暂无消息通知接口
+  return Promise.resolve({ data: { list: [] } })
 }
 
-// 标记消息已读
-export function readNotice(id) {
-  return request({
-    url: `/common/notice/${id}/read`,
-    method: 'put'
-  })
+// 后端暂无消息通知接口
+export function readNotice() {
+  // 后端暂无消息通知接口
+  return Promise.resolve({ data: { list: [] } })
 }
 
-// 清空消息
+// 后端暂无消息通知接口
 export function clearNotice() {
-  return request({
-    url: '/common/notice/clear',
-    method: 'delete'
-  })
+  // 后端暂无消息通知接口
+  return Promise.resolve({ data: { list: [] } })
 }

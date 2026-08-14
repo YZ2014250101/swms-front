@@ -37,7 +37,7 @@
     </el-row>
 
     <!-- 选课学生明细 -->
-    <el-table :data="tableData" border stripe style="width: 100%; margin-top: 16px">
+    <el-table :data="tableData" border stripe style="width: 100%; margin-top: 16px" v-loading="loading">
       <el-table-column prop="studentNo" label="学号" width="130" />
       <el-table-column prop="name" label="姓名" width="110" />
       <el-table-column prop="className" label="班级" width="160" />
@@ -50,26 +50,27 @@
 import { ref, reactive, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Search, Download } from '@element-plus/icons-vue'
+import { getTeacherCourses } from '@/api/modules/teacher/course'
+import { getCourseStudents } from '@/api/modules/teacher/student'
+import { exportStudentList } from '@/api/modules/teacher/score'
+import { onMounted } from 'vue'
 
 // 课程下拉
-// TODO: 对接后端 教师所授课程列表接口
-const courseOptions = ref([
-  { id: 1, courseName: '数据结构' },
-  { id: 2, courseName: '计算机网络' },
-  { id: 3, courseName: '软件工程' },
-  { id: 4, courseName: '高等数学' }
-])
+const courseOptions = ref([])
 
 const queryForm = reactive({
   courseId: ''
 })
 
-// 统计数据
-// TODO: 对接后端 选课统计接口，参数 courseId
+const loading = ref(false)
+const tableData = ref([])
+
+// 统计数据：选课人数取 studentList.length，课程容量取 course.maxNum
 const stats = reactive({
-  selectedCount: 5,
-  capacity: 60
+  selectedCount: 0,
+  capacity: 0
 })
+const currentCourse = ref({})
 
 // 选课率
 const selectionRate = computed(() => {
@@ -77,27 +78,70 @@ const selectionRate = computed(() => {
   return ((stats.selectedCount / stats.capacity) * 100).toFixed(1)
 })
 
-// mock 选课学生明细
-// TODO: 对接后端 选课学生明细接口，参数 courseId
-const tableData = ref([
-  { studentNo: '20230101', name: '张三', className: '计算机2301班', selectTime: '2025-08-25 09:30:12' },
-  { studentNo: '20230102', name: '李四', className: '计算机2301班', selectTime: '2025-08-25 09:35:48' },
-  { studentNo: '20230103', name: '王芳', className: '计算机2301班', selectTime: '2025-08-25 10:12:05' },
-  { studentNo: '20230201', name: '陈晨', className: '计算机2302班', selectTime: '2025-08-25 10:20:33' },
-  { studentNo: '20230202', name: '林晓', className: '计算机2302班', selectTime: '2025-08-25 11:05:19' }
-])
+// blob 下载通用函数
+function downloadBlob(response, filename) {
+  const blob = new Blob([response.data])
+  const url = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = filename; a.click()
+  window.URL.revokeObjectURL(url)
+}
+
+// 拉取课程下拉
+const fetchCourses = async () => {
+  try {
+    const res = await getTeacherCourses()
+    courseOptions.value = res.data?.courseList || []
+  } catch (e) {
+    // 拦截器已提示
+  }
+}
+
+// 拉取选课学生明细
+const fetchStats = async () => {
+  if (!queryForm.courseId) {
+    ElMessage.warning('请先选择课程')
+    return
+  }
+  loading.value = true
+  try {
+    const res = await getCourseStudents(queryForm.courseId)
+    const data = res.data || {}
+    tableData.value = data.studentList || []
+    currentCourse.value = data.course || {}
+    stats.selectedCount = tableData.value.length
+    stats.capacity = currentCourse.value?.maxNum || 0
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    loading.value = false
+  }
+}
 
 // 查询
 const handleQuery = () => {
-  // TODO: 对接后端 选课统计与明细接口
-  ElMessage.success('查询成功')
+  fetchStats()
 }
 
 // 导出
-const handleExport = () => {
-  // TODO: 对接后端 选课明细导出接口
-  ElMessage.info('导出接口待对接')
+const handleExport = async () => {
+  if (!queryForm.courseId) {
+    ElMessage.warning('请先选择课程')
+    return
+  }
+  try {
+    const response = await exportStudentList(queryForm.courseId)
+    const name = `选课名单_${currentCourse.value?.courseName || queryForm.courseId}.csv`
+    downloadBlob(response, name)
+    ElMessage.success('导出成功')
+  } catch (e) {
+    // 拦截器已提示
+  }
 }
+
+onMounted(() => {
+  fetchCourses()
+})
 </script>
 
 <style scoped>

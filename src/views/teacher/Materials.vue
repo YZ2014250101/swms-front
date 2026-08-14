@@ -1,7 +1,9 @@
 <!-- src/views/teacher/Materials.vue -->
-<!-- 课程资料管理，支持按课程筛选、上传、下载与删除 -->
+<!-- 课程资料管理：后端文档教师端暂无资料管理接口，页面以空表格 + el-empty 占位 -->
 <template>
   <el-card shadow="never">
+    <el-alert title="教师资料管理（后端暂未提供接口）" type="info" show-icon :closable="false" style="margin-bottom: 16px" />
+
     <el-form :inline="true" :model="queryForm" class="search-bar">
       <el-form-item label="课程">
         <el-select v-model="queryForm.courseId" placeholder="请选择课程" clearable style="width: 220px" @change="handleCourseChange">
@@ -12,6 +14,9 @@
         <el-button type="primary" :icon="Upload" @click="handleUpload">上传资料</el-button>
       </el-form-item>
     </el-form>
+
+    <!-- 后端暂未提供接口，空表格占位 -->
+    <el-empty description="教师资料管理（后端暂未提供接口）" />
 
     <el-table :data="tableData" border stripe style="width: 100%">
       <el-table-column prop="name" label="资料名称" min-width="200" />
@@ -74,13 +79,8 @@ import { ref, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Upload, Download, Delete } from '@element-plus/icons-vue'
 
-// 课程下拉
-// TODO: 对接后端 教师所授课程列表接口
-const courseOptions = ref([
-  { id: 1, courseName: '数据结构' },
-  { id: 2, courseName: '计算机网络' },
-  { id: 3, courseName: '软件工程' }
-])
+// 课程下拉（保留 UI，后端无资料管理接口）
+const courseOptions = ref([])
 
 // 分类选项
 const categoryOptions = ref(['课件', '教案', '习题', '实验指导', '其他'])
@@ -89,19 +89,13 @@ const queryForm = reactive({
   courseId: ''
 })
 
-// mock 资料列表
-// TODO: 对接后端 课程资料列表接口，参数 courseId
-const tableData = ref([
-  { id: 1, name: '数据结构 第一章 绪论.pdf', category: '课件', size: '2.3MB', uploadTime: '2025-09-01 10:20:30' },
-  { id: 2, name: '数据结构 实验指导书.docx', category: '实验指导', size: '880KB', uploadTime: '2025-09-05 14:10:00' },
-  { id: 3, name: '数据结构 历年真题.zip', category: '习题', size: '5.1MB', uploadTime: '2025-10-10 09:00:00' },
-  { id: 4, name: '数据结构 课件第三章.pptx', category: '课件', size: '3.7MB', uploadTime: '2025-10-15 16:30:00' }
-])
+// 后端暂无教师资料管理接口，表格保留为空
+const tableData = ref([])
 
 // 切换课程
 const handleCourseChange = () => {
-  // TODO: 对接后端 课程资料列表接口
-  ElMessage.success('课程已切换')
+  // 后端暂未提供接口
+  ElMessage.info('后端暂未提供资料管理接口')
 }
 
 // 上传弹窗
@@ -128,31 +122,14 @@ const handleExceed = () => {
 
 // 确认上传
 const handleUploadConfirm = () => {
-  if (!uploadForm.name) {
-    ElMessage.warning('请输入资料名称')
-    return
-  }
-  if (fileList.value.length === 0) {
-    ElMessage.warning('请先选择要上传的文件')
-    return
-  }
-  // TODO: 对接后端 资料上传接口
-  const file = fileList.value[0]
-  tableData.value.push({
-    id: Date.now(),
-    name: uploadForm.name,
-    category: uploadForm.category,
-    size: ((file.size || 0) / 1024 / 1024).toFixed(1) + 'MB',
-    uploadTime: new Date().toLocaleString()
-  })
+  // 后端暂未提供资料管理接口
+  ElMessage.info('后端暂未提供资料管理接口')
   uploadDialog.value = false
-  ElMessage.success('资料上传成功')
 }
 
 // 下载
 const handleDownload = (row) => {
-  // TODO: 对接后端 资料下载接口
-  ElMessage.info(`下载【${row.name}】接口待对接`)
+  ElMessage.info('后端暂未提供资料管理接口')
 }
 
 // 删除（二次确认）
@@ -163,12 +140,7 @@ const handleDelete = (row) => {
     type: 'warning'
   })
     .then(() => {
-      // TODO: 对接后端 资料删除接口
-      const idx = tableData.value.findIndex((item) => item.id === row.id)
-      if (idx !== -1) {
-        tableData.value.splice(idx, 1)
-      }
-      ElMessage.success('删除成功')
+      ElMessage.info('后端暂未提供资料管理接口')
     })
     .catch(() => {
       ElMessage.info('已取消删除')

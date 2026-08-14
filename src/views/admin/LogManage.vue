@@ -1,5 +1,5 @@
 <!-- src/views/admin/LogManage.vue -->
-<!-- 日志管理，支持按操作人/类型/时间范围查询与导出 -->
+<!-- 日志管理：列表查询、清空日志 -->
 <template>
   <el-card shadow="never">
     <!-- 搜索栏 -->
@@ -30,14 +30,14 @@
 
     <!-- 操作栏 -->
     <div class="toolbar">
-      <el-button type="success" :icon="Download" @click="handleExport">导出</el-button>
+      <el-button type="danger" :icon="Delete" @click="handleClean">清空日志</el-button>
     </div>
 
     <!-- 列表 -->
-    <el-table :data="tableData" border stripe style="width: 100%; margin-top: 16px">
-      <el-table-column prop="logNo" label="日志编号" width="130" />
+    <el-table :data="pagedData" border stripe v-loading="loading" style="width: 100%; margin-top: 16px">
+      <el-table-column prop="logNo" label="日志编号" width="150" />
       <el-table-column prop="operator" label="操作人" width="110" />
-      <el-table-column prop="role" label="角色" width="100" />
+      <el-table-column prop="role" label="角色" width="110" />
       <el-table-column prop="type" label="操作类型" width="110" align="center">
         <template #default="{ row }">
           <el-tag>{{ row.type }}</el-tag>
@@ -53,7 +53,7 @@
       v-model:current-page="page.current"
       v-model:page-size="page.size"
       :page-sizes="[10, 20, 50]"
-      :total="page.total"
+      :total="filteredData.length"
       layout="total, sizes, prev, pager, next, jumper"
       background
     />
@@ -61,42 +61,84 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Search, Refresh, Download } from '@element-plus/icons-vue'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Search, Refresh, Delete } from '@element-plus/icons-vue'
+import { getLogList, cleanLog } from '@/api/modules/admin/log'
+
+const loading = ref(false)
+const tableData = ref([])
 
 // 操作类型选项
 const typeOptions = ref(['登录', '新增', '编辑', '删除', '导出', '权限配置'])
 
-// mock 日志列表
-// TODO: 对接后端 日志列表接口
-const tableData = ref([
-  { id: 1, logNo: 'LOG20250810001', operator: 'admin', role: '超级管理员', type: '登录', content: '登录系统', ip: '192.168.1.10', operateTime: '2025-08-10 09:00:12' },
-  { id: 2, logNo: 'LOG20250810002', operator: 'admin', role: '超级管理员', type: '新增', content: '新增学生账号 202300105', ip: '192.168.1.10', operateTime: '2025-08-10 09:15:30' },
-  { id: 3, logNo: 'LOG20250810003', operator: 'sysadmin', role: '系统管理员', type: '删除', content: '删除课程 人工智能导论', ip: '192.168.1.20', operateTime: '2025-08-10 10:20:45' },
-  { id: 4, logNo: 'LOG20250810004', operator: 'sysadmin', role: '系统管理员', type: '导出', content: '导出考试安排表', ip: '192.168.1.20', operateTime: '2025-08-10 11:05:18' },
-  { id: 5, logNo: 'LOG20250810005', operator: 'admin', role: '超级管理员', type: '权限配置', content: '为管理员【运维管理员】配置权限', ip: '192.168.1.10', operateTime: '2025-08-10 14:30:00' }
-])
-
 // 搜索
 const searchForm = reactive({ operator: '', type: '', dateRange: [] })
+
+const filteredData = computed(() => {
+  return tableData.value.filter((row) => {
+    if (searchForm.operator && !(row.operator || '').includes(searchForm.operator)) return false
+    if (searchForm.type && row.type !== searchForm.type) return false
+    if (searchForm.dateRange && searchForm.dateRange.length === 2) {
+      const [start, end] = searchForm.dateRange
+      const t = row.operateTime || ''
+      if (t < start || t > end + ' 23:59:59') return false
+    }
+    return true
+  })
+})
+
+const pagedData = computed(() => {
+  const start = (page.current - 1) * page.size
+  return filteredData.value.slice(start, start + page.size)
+})
+
+const fetchList = async () => {
+  loading.value = true
+  try {
+    const res = await getLogList()
+    tableData.value = res.data.logList || []
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  fetchList()
+})
+
 const handleSearch = () => {
-  // TODO: 对接后端 日志列表查询接口
-  ElMessage.success('查询成功')
+  page.current = 1
 }
 const handleReset = () => {
   searchForm.operator = ''
   searchForm.type = ''
   searchForm.dateRange = []
+  page.current = 1
 }
 
 // 分页
-const page = reactive({ current: 1, size: 10, total: 5 })
+const page = reactive({ current: 1, size: 10 })
 
-// 导出
-const handleExport = () => {
-  // TODO: 对接后端 日志导出接口
-  ElMessage.success('导出成功')
+// 清空日志
+const handleClean = () => {
+  ElMessageBox.confirm('确认要清空所有系统日志吗？此操作不可恢复！', '清空日志', {
+    confirmButtonText: '确认清空',
+    cancelButtonText: '取消',
+    type: 'warning'
+  })
+    .then(async () => {
+      try {
+        await cleanLog()
+        ElMessage.success('清空成功')
+        fetchList()
+      } catch (e) {
+        // 拦截器已提示
+      }
+    })
+    .catch(() => {})
 }
 </script>
 

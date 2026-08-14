@@ -7,8 +7,8 @@
       <p class="login-subtitle">Student Work Management System</p>
 
       <el-form ref="loginFormRef" :model="form" :rules="rules" size="large">
-        <el-form-item prop="userType">
-          <el-select v-model="form.userType" placeholder="请选择登录身份" style="width: 100%">
+        <el-form-item prop="role">  
+          <el-select v-model="form.role" placeholder="请选择登录身份" style="width: 100%">
             <el-option label="学生" value="student" />
             <el-option label="教师" value="teacher" />
             <el-option label="系统管理员" value="admin" />
@@ -82,14 +82,14 @@ const loading = ref(false)
 const codeUrl = ref('')
 
 const form = reactive({
-  userType: '',
+  role: '',
   username: '',
   password: '',
   code: ''
 })
 
 const rules = {
-  userType: [{ required: true, message: '请选择登录身份', trigger: 'change' }],
+  role: [{ required: true, message: '请选择登录身份', trigger: 'change' }],
   username: [{ required: true, message: '请输入账号', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
   code: [{ required: true, message: '请输入验证码', trigger: 'blur' }]
@@ -102,45 +102,46 @@ function refreshCode() {
 }
 
 // 登录
-// 登录
 async function handleLogin() {
   if (!loginFormRef.value) return
   await loginFormRef.value.validate(async (valid) => {
     if (!valid) return
     loading.value = true
-    try {
-      // 1. 调用api封装好的登录函数，传入表单
-      const res = await login(form)
-      console.log(res)
-      
-      // 2. 判断后端返回状态
-      if (res.code !== 200) {
-        ElMessage.error(res.data.msg)
-        return
-      }
-      console.log(res.data)
+    form.role = form.role.toLowerCase()
+    form.username = form.username.trim()
+    form.password = form.password.trim()
+    form.code = form.code.trim()
 
-      // 3. 解构后端返回数据，适配store格式
-      const data = res.data
+    try {
+      // 调用后端登录接口（按角色路由到 /student/doLogin 等）
+      // request.js 拦截器已处理 code!==200，失败会抛错进入 catch
+      console.log('登录请求参数:', form)
       
-      const loginPayload = {
+      const res = await login({
+        role: form.role,
+        username: form.username,
+        password: form.password,
+        code: form.code
+      })
+      
+      // 后端返回 data: { token, role, userId, name, studentId|teacherId|adminId }
+      const data = res.data || {}
+      userStore.loginAction({
         token: data.token,
-        role: data.role,
+        role: data.role || form.role,
         userInfo: {
           userId: data.userId,
           name: data.name,
-          studentId: data.studentId
+          studentId: data.studentId,
+          teacherId: data.teacherId,
+          adminId: data.adminId
         }
-      }
-      // 4. 执行登录存储、跳转
-      userStore.loginAction(loginPayload)
+      })
       ElMessage.success('登录成功')
       const redirect = route.query.redirect
-      router.push(redirect || ROLE_HOME[form.userType] || '/login')
-
+      router.push(redirect || ROLE_HOME[form.role] || '/login') 
     } catch (err) {
       console.error('登录请求异常', err)
-      ElMessage.error('网络请求失败，请稍后重试')
     } finally {
       loading.value = false
     }

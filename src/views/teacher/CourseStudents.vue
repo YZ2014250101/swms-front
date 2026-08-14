@@ -1,5 +1,5 @@
 <!-- src/views/teacher/CourseStudents.vue -->
-<!-- 授课班级学生名单查询，支持按课程筛选与导出 -->
+<!-- 授课班级学生名单查询，支持按课程筛选、导出与按学号添加学生 -->
 <template>
   <el-card shadow="never">
     <el-form :inline="true" :model="queryForm" class="search-bar">
@@ -11,10 +11,11 @@
       <el-form-item>
         <el-button type="primary" :icon="Search" @click="handleQuery">查询</el-button>
         <el-button type="success" :icon="Download" @click="handleExport">导出名单</el-button>
+        <el-button type="warning" :icon="Plus" @click="handleAdd">按学号添加</el-button>
       </el-form-item>
     </el-form>
 
-    <el-table :data="tableData" border stripe style="width: 100%">
+    <el-table :data="tableData" border stripe style="width: 100%" v-loading="loading">
       <el-table-column prop="studentNo" label="学号" width="130" />
       <el-table-column prop="name" label="姓名" width="110" />
       <el-table-column prop="gender" label="性别" width="80" align="center" />
@@ -32,6 +33,22 @@
       <el-tag type="primary" size="large">男生：{{ maleCount }} 人</el-tag>
       <el-tag type="warning" size="large">女生：{{ femaleCount }} 人</el-tag>
     </div>
+
+    <!-- 按学号添加学生弹窗 -->
+    <el-dialog v-model="addDialog" title="按学号添加学生到课程" width="460px">
+      <el-form :model="addForm" label-width="90px">
+        <el-form-item label="课程">
+          <el-input :model-value="currentCourseName" disabled />
+        </el-form-item>
+        <el-form-item label="学号">
+          <el-input v-model="addForm.studentNo" placeholder="请输入学生学号" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="addDialog = false">取消</el-button>
+        <el-button type="primary" @click="handleAddConfirm">确认添加</el-button>
+      </template>
+    </el-dialog>
   </el-card>
 </template>
 
@@ -39,54 +56,130 @@
 import { ref, reactive, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Search, Download } from '@element-plus/icons-vue'
+import { Search, Download, Plus } from '@element-plus/icons-vue'
+import { getTeacherCourses } from '@/api/modules/teacher/course'
+import { getCourseStudents, addStudentToCourse } from '@/api/modules/teacher/student'
+import { exportStudentList } from '@/api/modules/teacher/score'
+import { onMounted } from 'vue'
 
 const route = useRoute()
 
 // 课程下拉
-// TODO: 对接后端 教师所授课程列表接口
-const courseOptions = ref([
-  { id: 1, courseName: '数据结构' },
-  { id: 2, courseName: '计算机网络' },
-  { id: 3, courseName: '软件工程' },
-  { id: 4, courseName: '高等数学' }
-])
+const courseOptions = ref([])
 
 const queryForm = reactive({
   courseId: route.query.courseId ? Number(route.query.courseId) : ''
 })
 
-// mock 学生名单
-// TODO: 对接后端 授课班级学生名单接口，参数 courseId
-const tableData = ref([
-  { id: 1, studentNo: '20230101', name: '张三', gender: '男', className: '计算机2301班', phone: '13800138001' },
-  { id: 2, studentNo: '20230102', name: '李四', gender: '男', className: '计算机2301班', phone: '13800138002' },
-  { id: 3, studentNo: '20230103', name: '王芳', gender: '女', className: '计算机2301班', phone: '13800138003' },
-  { id: 4, studentNo: '20230104', name: '刘洋', gender: '男', className: '计算机2301班', phone: '13800138004' },
-  { id: 5, studentNo: '20230105', name: '赵敏', gender: '女', className: '计算机2301班', phone: '13800138005' }
-])
+const loading = ref(false)
+const tableData = ref([])
+const currentCourse = ref({})
+
+const currentCourseName = computed(() => currentCourse.value?.courseName || '')
 
 // 性别统计
 const maleCount = computed(() => tableData.value.filter((item) => item.gender === '男').length)
 const femaleCount = computed(() => tableData.value.filter((item) => item.gender === '女').length)
 
-// 查询
-const handleQuery = () => {
-  // TODO: 对接后端 授课班级学生名单接口
-  ElMessage.success('查询成功')
+// blob 下载通用函数
+function downloadBlob(response, filename) {
+  const blob = new Blob([response.data])
+  const url = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = filename; a.click()
+  window.URL.revokeObjectURL(url)
 }
 
-// 导出
-const handleExport = () => {
-  // TODO: 对接后端 学生名单导出接口
-  ElMessage.info('导出名单接口待对接')
+// 拉取课程下拉
+const fetchCourses = async () => {
+  try {
+    const res = await getTeacherCourses()
+    courseOptions.value = res.data?.courseList || []
+    // 路由带 courseId 时自动选中并查询
+    if (queryForm.courseId) {
+      handleQuery()
+    }
+  } catch (e) {
+    // 拦截器已提示
+  }
+}
+
+// 拉取学生名单
+const fetchStudents = async () => {
+  if (!queryForm.courseId) {
+    ElMessage.warning('请先选择课程')
+    return
+  }
+  loading.value = true
+  try {
+    const res = await getCourseStudents(queryForm.courseId)
+    const data = res.data || {}
+    tableData.value = data.studentList || []
+    currentCourse.value = data.course || {}
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    loading.value = false
+  }
+}
+
+// 查询
+const handleQuery = () => {
+  fetchStudents()
+}
+
+// 导出名单
+const handleExport = async () => {
+  if (!queryForm.courseId) {
+    ElMessage.warning('请先选择课程')
+    return
+  }
+  try {
+    const response = await exportStudentList(queryForm.courseId)
+    const name = `学生名单_${currentCourseName.value || queryForm.courseId}.csv`
+    downloadBlob(response, name)
+    ElMessage.success('导出成功')
+  } catch (e) {
+    // 拦截器已提示
+  }
 }
 
 // 查看详情
 const handleDetail = (row) => {
-  // TODO: 对接后端 学生详情接口
   ElMessage.info(`学生【${row.name}】详情待对接`)
 }
+
+// 添加学生弹窗
+const addDialog = ref(false)
+const addForm = reactive({ studentNo: '' })
+
+const handleAdd = () => {
+  if (!queryForm.courseId) {
+    ElMessage.warning('请先选择课程')
+    return
+  }
+  addForm.studentNo = ''
+  addDialog.value = true
+}
+
+const handleAddConfirm = async () => {
+  if (!addForm.studentNo) {
+    ElMessage.warning('请输入学生学号')
+    return
+  }
+  try {
+    await addStudentToCourse(queryForm.courseId, addForm.studentNo)
+    ElMessage.success('添加成功')
+    addDialog.value = false
+    fetchStudents()
+  } catch (e) {
+    // 拦截器已提示
+  }
+}
+
+onMounted(() => {
+  fetchCourses()
+})
 </script>
 
 <style scoped>

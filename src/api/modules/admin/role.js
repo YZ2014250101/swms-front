@@ -1,55 +1,34 @@
 // src/api/modules/admin/role.js
-// 管理员端角色接口
+// 角色权限接口：后端无角色权限接口，统一空实现
+// 后端无角色权限接口
 import request from '../../request'
 
-// 获取角色列表
-export function getRoleList(params) {
-  return request({
-    url: '/admin/role/list',
-    method: 'get',
-    params
-  })
+// 后端无角色权限接口
+export function getRoleList() {
+  // 后端无角色权限接口
+  return Promise.resolve({ data: {} })
 }
 
-// 新增角色
-export function addRole(data) {
-  return request({
-    url: '/admin/role',
-    method: 'post',
-    data
-  })
+// 后端无角色权限接口
+export function addRole() {
+  // 后端无角色权限接口
+  return Promise.resolve({ data: {} })
 }
 
-// 更新角色
-export function updateRole(data) {
-  return request({
-    url: '/admin/role',
-    method: 'put',
-    data
-  })
+// 后端无角色权限接口
+export function updateRole() {
+  // 后端无角色权限接口
+  return Promise.resolve({ data: {} })
 }
 
-// 删除角色
-export function deleteRole(id) {
-  return request({
-    url: `/admin/role/${id}`,
-    method: 'delete'
-  })
+// 后端无角色权限接口
+export function deleteRole() {
+  // 后端无角色权限接口
+  return Promise.resolve({ data: {} })
 }
 
-// 分配权限
-export function assignPermissions(data) {
-  return request({
-    url: '/admin/role/permissions',
-    method: 'post',
-    data
-  })
-}
-
-// 获取权限树
-export function getPermissionTree() {
-  return request({
-    url: '/admin/role/permission-tree',
-    method: 'get'
-  })
+// 后端无角色权限接口
+export function getPermissionList() {
+  // 后端无角色权限接口
+  return Promise.resolve({ data: {} })
 }

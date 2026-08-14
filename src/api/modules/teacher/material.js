@@ -1,30 +1,22 @@
 // src/api/modules/teacher/material.js
-// 教师端资料接口
+// 教师端课程资料管理接口：后端文档教师端无资料管理接口，统一空实现
+// 后端暂无教师资料管理接口
 import request from '../../request'
 
-// 获取资料列表
-export function getMaterialList(params) {
-  return request({
-    url: '/teacher/material/list',
-    method: 'get',
-    params
-  })
+// 后端暂无教师资料管理接口
+export function getMaterialList() {
+  // 后端暂无教师资料管理接口
+  return Promise.resolve({ data: {} })
 }
 
-// 上传资料（formData）
-export function uploadMaterial(data) {
-  return request({
-    url: '/teacher/material/upload',
-    method: 'post',
-    data,
-    headers: { 'Content-Type': 'multipart/form-data' }
-  })
+// 后端暂无教师资料管理接口
+export function uploadMaterial() {
+  // 后端暂无教师资料管理接口
+  return Promise.resolve({ data: {} })
 }
 
-// 删除资料
-export function deleteMaterial(id) {
-  return request({
-    url: `/teacher/material/${id}`,
-    method: 'delete'
-  })
+// 后端暂无教师资料管理接口
+export function deleteMaterial() {
+  // 后端暂无教师资料管理接口
+  return Promise.resolve({ data: {} })
 }

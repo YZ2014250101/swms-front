@@ -1,110 +1,64 @@
 <!-- src/views/common/Profile.vue -->
-<!-- 个人信息：查看与修改（所有角色共用） -->
+<!-- 个人信息：按角色调用各端 myInfo 接口展示（后端暂无修改接口，只读） -->
 <template>
   <div class="profile-page">
-    <el-card shadow="never">
+    <el-card shadow="never" v-loading="loading">
       <template #header><span>个人信息</span></template>
-      <el-row :gutter="24">
-        <el-col :span="8">
-          <div class="avatar-box">
-            <el-avatar :size="100" :icon="UserFilled" />
-            <el-button text type="primary" @click="handleAvatar">更换头像</el-button>
-          </div>
-        </el-col>
-        <el-col :span="16">
-          <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
-            <el-form-item label="账号">
-              <el-input v-model="form.userId" disabled />
-            </el-form-item>
-            <el-form-item label="姓名" prop="name">
-              <el-input v-model="form.name" />
-            </el-form-item>
-            <el-form-item label="手机号" prop="phone">
-              <el-input v-model="form.phone" />
-            </el-form-item>
-            <el-form-item label="邮箱" prop="email">
-              <el-input v-model="form.email" />
-            </el-form-item>
-            <el-form-item>
-              <el-button type="primary" :loading="loading" @click="handleSave">保存修改</el-button>
-              <el-button @click="handleReset">重置</el-button>
-            </el-form-item>
-          </el-form>
-        </el-col>
-      </el-row>
+      <el-alert
+        v-if="errorMsg"
+        :title="errorMsg"
+        type="error"
+        show-icon
+        :closable="false"
+        style="margin-bottom: 16px"
+      />
+      <el-descriptions v-else :column="2" border>
+        <el-descriptions-item label="姓名">{{ info.name }}</el-descriptions-item>
+        <!-- 学生字段 -->
+        <template v-if="role === 'student'">
+          <el-descriptions-item label="学号">{{ info.studentId }}</el-descriptions-item>
+          <el-descriptions-item label="性别">{{ info.gender }}</el-descriptions-item>
+          <el-descriptions-item label="专业">{{ info.major }}</el-descriptions-item>
+        </template>
+        <!-- 教师字段 -->
+        <template v-else-if="role === 'teacher'">
+          <el-descriptions-item label="工号">{{ info.teacherId }}</el-descriptions-item>
+          <el-descriptions-item label="院系">{{ info.department }}</el-descriptions-item>
+          <el-descriptions-item label="职称">{{ info.title }}</el-descriptions-item>
+        </template>
+        <!-- 管理员字段 -->
+        <template v-else-if="role === 'admin'">
+          <el-descriptions-item label="管理员ID">{{ info.adminId }}</el-descriptions-item>
+        </template>
+      </el-descriptions>
     </el-card>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { UserFilled } from '@element-plus/icons-vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useUserStore } from '@/store/modules/user'
-import { updateProfile } from '@/api/modules/common/auth'
-import { phoneValidator, emailValidator } from '@/utils/validate'
+import { getMyInfo } from '@/api/modules/common/profile'
 
 const userStore = useUserStore()
-console.log(userStore.userInfo)
-const formRef = ref()
+const role = computed(() => userStore.role)
 const loading = ref(false)
+const errorMsg = ref('')
+const info = reactive({})
 
-const form = reactive({
-  userId: '',
-  name: '',
-  phone: '',
-  email: ''
-})
-
-const rules = {
-  name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
-  phone: [{ validator: phoneValidator, trigger: 'blur' }],
-  email: [{ validator: emailValidator, trigger: 'blur' }]
-}
-
-function loadInfo() {
-  // 从 store 取当前用户信息
-  const info = userStore.userInfo || {}
-  form.userId = info.userId || ''
-  form.name = info.name || ''
-  form.phone = info.phone || ''
-  form.email = info.email || ''
-}
-
-async function handleSave() {
-  if (!formRef.value) return
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return
-    loading.value = true
-    try {
-      // TODO: 对接后端
-      // await updateProfile(form)
-      userStore.setUserInfoAction({ ...userStore.userInfo, ...form })
-      ElMessage.success('保存成功')
-    } catch (err) {
-      console.error(err)
-    } finally {
-      loading.value = false
-    }
-  })
-}
-
-function handleReset() {
-  loadInfo()
-}
-
-function handleAvatar() {
-  ElMessage.info('头像上传功能待对接')
+async function loadInfo() {
+  loading.value = true
+  errorMsg.value = ''
+  try {
+    const res = await getMyInfo(userStore.role)
+    Object.assign(info, res.data || {})
+  } catch (err) {
+    console.error('获取个人信息失败', err)
+    errorMsg.value = '获取个人信息失败，请检查后端接口 /' + userStore.role + '/myInfo'
+  } finally {
+    loading.value = false
+  }
 }
 
 onMounted(loadInfo)
 </script>
-
-<style scoped>
-.avatar-box {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-}
-</style>

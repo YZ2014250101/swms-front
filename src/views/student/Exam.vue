@@ -1,20 +1,34 @@
 <!-- src/views/student/Exam.vue -->
 <!-- 考试安排查询，含考试须知提示 -->
+<!-- 接口：getExamList / getExamByDate（@/api/modules/student/exam） -->
 <template>
   <el-card shadow="never">
-    <el-table :data="tableData" border stripe style="width: 100%">
+    <el-form :inline="true" :model="queryForm" class="search-bar">
+      <el-form-item label="考试日期">
+        <el-date-picker
+          v-model="queryForm.examDate"
+          type="date"
+          value-format="YYYY-MM-DD"
+          placeholder="请选择日期"
+          clearable
+          style="width: 200px"
+          @change="handleDateChange"
+        />
+      </el-form-item>
+      <el-form-item>
+        <el-button type="primary" @click="loadExams">全部考试</el-button>
+      </el-form-item>
+    </el-form>
+
+    <el-table :data="examList" v-loading="loading" border stripe style="width: 100%">
       <el-table-column prop="courseName" label="课程名称" min-width="160" />
-      <el-table-column label="考试类型" width="100" align="center">
-        <template #default="{ row }">
-          <el-tag :type="row.type === '期中' ? 'warning' : 'danger'">{{ row.type }}</el-tag>
-        </template>
-      </el-table-column>
       <el-table-column prop="examDate" label="考试日期" width="130" align="center" />
       <el-table-column prop="examTime" label="考试时间" width="150" align="center" />
-      <el-table-column prop="location" label="考试地点" width="140" />
-      <el-table-column prop="room" label="考场" width="110" align="center" />
-      <el-table-column prop="seat" label="座位号" width="90" align="center" />
+      <el-table-column prop="classroom" label="考试地点" width="160" />
+      <el-table-column prop="remark" label="备注" min-width="160" />
     </el-table>
+
+    <el-empty v-if="!loading && examList.length === 0" description="暂无考试安排" :image-size="80" style="margin-top: 16px" />
 
     <!-- 考试须知 -->
     <el-alert
@@ -38,20 +52,56 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
+import { getExamList, getExamByDate } from '@/api/modules/student/exam'
 
-// mock 考试安排数据
-// TODO: 对接后端 考试安排查询接口
-const tableData = ref([
-  { courseName: '数据结构', type: '期中', examDate: '2025-11-10', examTime: '08:30 - 10:30', location: '教学楼A301', room: '第一考场', seat: 'A015' },
-  { courseName: '高等数学', type: '期中', examDate: '2025-11-12', examTime: '14:00 - 16:00', location: '教学楼A101', room: '第三考场', seat: 'C022' },
-  { courseName: '计算机网络', type: '期末', examDate: '2026-01-08', examTime: '08:30 - 10:30', location: '教学楼B205', room: '第二考场', seat: 'B008' },
-  { courseName: '软件工程', type: '期末', examDate: '2026-01-10', examTime: '14:00 - 16:00', location: '教学楼C102', room: '第一考场', seat: 'A003' },
-  { courseName: '大学英语', type: '期末', examDate: '2026-01-12', examTime: '10:00 - 12:00', location: '教学楼D301', room: '第四考场', seat: 'D011' }
-])
+const loading = ref(false)
+const examList = ref([])
+
+const queryForm = reactive({
+  examDate: ''
+})
+
+// 加载全部考试安排
+const loadExams = async () => {
+  queryForm.examDate = ''
+  loading.value = true
+  try {
+    const res = await getExamList()
+    examList.value = res.data?.examList || []
+  } catch (err) {
+    console.error('获取考试安排失败', err)
+  } finally {
+    loading.value = false
+  }
+}
+
+// 按日期筛选
+const handleDateChange = async (date) => {
+  if (!date) {
+    await loadExams()
+    return
+  }
+  loading.value = true
+  try {
+    const res = await getExamByDate(date)
+    examList.value = res.data?.examList || []
+  } catch (err) {
+    console.error('按日期查询考试安排失败', err)
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  loadExams()
+})
 </script>
 
 <style scoped>
+.search-bar {
+  margin-bottom: 16px;
+}
 .notice-list {
   margin: 8px 0 0;
   padding-left: 18px;

@@ -5,20 +5,18 @@
     <!-- 搜索栏 -->
     <el-form :inline="true" :model="searchForm" class="search-form">
       <el-form-item label="学号">
-        <el-input v-model="searchForm.studentNo" placeholder="请输入学号" clearable />
+        <el-input v-model="searchForm.studentId" placeholder="请输入学号" clearable />
       </el-form-item>
       <el-form-item label="姓名">
         <el-input v-model="searchForm.name" placeholder="请输入姓名" clearable />
       </el-form-item>
-      <el-form-item label="班级">
-        <el-select v-model="searchForm.classId" placeholder="请选择班级" clearable>
-          <el-option v-for="item in classOptions" :key="item.value" :label="item.label" :value="item.value" />
-        </el-select>
+      <el-form-item label="专业">
+        <el-input v-model="searchForm.major" placeholder="请输入专业" clearable />
       </el-form-item>
       <el-form-item label="状态">
-        <el-select v-model="searchForm.status" placeholder="请选择状态" clearable>
-          <el-option label="正常" value="正常" />
-          <el-option label="禁用" value="禁用" />
+        <el-select v-model="searchForm.status" placeholder="请选择状态" clearable style="width: 120px">
+          <el-option label="正常" :value="1" />
+          <el-option label="禁用" :value="0" />
         </el-select>
       </el-form-item>
       <el-form-item>
@@ -29,27 +27,28 @@
 
     <!-- 操作栏 -->
     <div class="toolbar">
-      <el-button type="success" :icon="Upload" @click="importDialog = true">批量导入</el-button>
+      <el-button type="success" :icon="Upload" @click="openImport">批量导入</el-button>
       <el-button type="primary" :icon="Plus" @click="handleAdd">新增</el-button>
     </div>
 
     <!-- 列表 -->
-    <el-table :data="tableData" border stripe style="width: 100%; margin-top: 16px">
-      <el-table-column prop="studentNo" label="学号" width="130" />
+    <el-table :data="filteredList" border stripe v-loading="loading" style="width: 100%; margin-top: 16px">
+      <el-table-column prop="studentId" label="学号" width="130" />
       <el-table-column prop="name" label="姓名" width="100" />
       <el-table-column prop="gender" label="性别" width="80" align="center" />
-      <el-table-column prop="className" label="班级" width="140" />
-      <el-table-column prop="phone" label="手机号" width="130" />
+      <el-table-column prop="age" label="年龄" width="80" align="center" />
+      <el-table-column prop="major" label="专业" min-width="140" />
+      <el-table-column prop="username" label="用户名" width="120" />
       <el-table-column label="状态" width="90" align="center">
         <template #default="{ row }">
-          <el-tag :type="row.status === '正常' ? 'success' : 'danger'">{{ row.status }}</el-tag>
+          <el-tag :type="Number(row.status) === 1 ? 'success' : 'danger'">{{ Number(row.status) === 1 ? '正常' : '禁用' }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column label="操作" width="280" align="center" fixed="right">
         <template #default="{ row }">
           <el-button type="primary" link size="small" @click="handleEdit(row)">编辑</el-button>
           <el-button type="warning" link size="small" @click="handleResetPwd(row)">重置密码</el-button>
-          <el-button :type="row.status === '正常' ? 'info' : 'success'" link size="small" @click="handleToggleStatus(row)">{{ row.status === '正常' ? '禁用' : '启用' }}</el-button>
+          <el-button :type="Number(row.status) === 1 ? 'info' : 'success'" link size="small" @click="handleToggleStatus(row)">{{ Number(row.status) === 1 ? '禁用' : '启用' }}</el-button>
           <el-button type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
         </template>
       </el-table-column>
@@ -60,7 +59,7 @@
       v-model:current-page="page.current"
       v-model:page-size="page.size"
       :page-sizes="[10, 20, 50]"
-      :total="page.total"
+      :total="filteredList.length"
       layout="total, sizes, prev, pager, next, jumper"
       background
     />
@@ -68,8 +67,14 @@
     <!-- 新增/编辑弹窗 -->
     <el-dialog v-model="dialogVisible" :title="editMode ? '编辑学生' : '新增学生'" width="520px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
-        <el-form-item label="学号" prop="studentNo">
-          <el-input v-model="form.studentNo" placeholder="请输入学号" :disabled="editMode" />
+        <el-form-item label="学号" prop="studentId">
+          <el-input v-model="form.studentId" placeholder="请输入学号" :disabled="editMode" />
+        </el-form-item>
+        <el-form-item label="用户名" prop="username">
+          <el-input v-model="form.username" placeholder="请输入用户名" />
+        </el-form-item>
+        <el-form-item v-if="!editMode" label="密码" prop="password">
+          <el-input v-model="form.password" type="password" show-password placeholder="请输入密码" />
         </el-form-item>
         <el-form-item label="姓名" prop="name">
           <el-input v-model="form.name" placeholder="请输入姓名" />
@@ -80,27 +85,22 @@
             <el-radio value="女">女</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="班级" prop="classId">
-          <el-select v-model="form.classId" placeholder="请选择班级" style="width: 100%">
-            <el-option v-for="item in classOptions" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
+        <el-form-item label="年龄" prop="age">
+          <el-input-number v-model="form.age" :min="0" :max="120" controls-position="right" />
         </el-form-item>
-        <el-form-item label="手机号" prop="phone">
-          <el-input v-model="form.phone" placeholder="请输入手机号" />
-        </el-form-item>
-        <el-form-item label="邮箱" prop="email">
-          <el-input v-model="form.email" placeholder="请输入邮箱" />
+        <el-form-item label="专业" prop="major">
+          <el-input v-model="form.major" placeholder="请输入专业" />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleConfirm">确认</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleConfirm">确认</el-button>
       </template>
     </el-dialog>
 
     <!-- 批量导入弹窗 -->
-    <el-dialog v-model="importDialog" title="批量导入学生" width="480px">
-      <el-upload drag accept=".xlsx,.xls" :auto-upload="false" :limit="1">
+    <el-dialog v-model="importDialog" title="批量导入学生" width="480px" @close="handleImportClose">
+      <el-upload drag accept=".xlsx,.xls" :auto-upload="false" :limit="1" :on-change="onFileChange" :on-remove="onFileRemove" ref="uploadRef">
         <el-icon class="el-icon--upload"><Upload /></el-icon>
         <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
         <template #tip>
@@ -109,49 +109,59 @@
       </el-upload>
       <template #footer>
         <el-button @click="importDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleImport">确认导入</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleImport">确认导入</el-button>
       </template>
     </el-dialog>
   </el-card>
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh, Plus, Upload } from '@element-plus/icons-vue'
+import { getStudentList, addStudent, toEditStudent, updateStudent, updateStuStatus, resetStuPwd, deleteStudent, importStudent } from '@/api/modules/admin/user'
 
-// 班级下拉
-// TODO: 对接后端 班级下拉列表接口
-const classOptions = ref([
-  { value: 1, label: '计算机2301班' },
-  { value: 2, label: '计算机2302班' },
-  { value: 3, label: '软件2301班' }
-])
+const loading = ref(false)
+const submitting = ref(false)
+const tableData = ref([])
 
-// mock 学生列表
-// TODO: 对接后端 学生列表接口
-const tableData = ref([
-  { id: 1, studentNo: '202300101', name: '张三', gender: '男', classId: 1, className: '计算机2301班', phone: '13800138001', email: 'zhangsan@edu.cn', status: '正常' },
-  { id: 2, studentNo: '202300102', name: '李四', gender: '女', classId: 1, className: '计算机2301班', phone: '13800138002', email: 'lisi@edu.cn', status: '正常' },
-  { id: 3, studentNo: '202300103', name: '王芳', gender: '女', classId: 2, className: '计算机2302班', phone: '13800138003', email: 'wangfang@edu.cn', status: '禁用' },
-  { id: 4, studentNo: '202300201', name: '赵六', gender: '男', classId: 3, className: '软件2301班', phone: '13800138004', email: 'zhaoliu@edu.cn', status: '正常' }
-])
+const fetchList = async () => {
+  loading.value = true
+  try {
+    const res = await getStudentList()
+    tableData.value = res.data.studentList || []
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(fetchList)
 
 // 搜索
-const searchForm = reactive({ studentNo: '', name: '', classId: '', status: '' })
+const searchForm = reactive({ studentId: '', name: '', major: '', status: '' })
+const filteredList = computed(() => {
+  return tableData.value.filter((row) => {
+    if (searchForm.studentId && !(row.studentId || '').includes(searchForm.studentId)) return false
+    if (searchForm.name && !(row.name || '').includes(searchForm.name)) return false
+    if (searchForm.major && !(row.major || '').includes(searchForm.major)) return false
+    if (searchForm.status !== '' && Number(row.status) !== Number(searchForm.status)) return false
+    return true
+  })
+})
 const handleSearch = () => {
-  // TODO: 对接后端 学生列表查询接口
-  ElMessage.success('查询成功')
+  page.current = 1
 }
 const handleReset = () => {
-  searchForm.studentNo = ''
+  searchForm.studentId = ''
   searchForm.name = ''
-  searchForm.classId = ''
+  searchForm.major = ''
   searchForm.status = ''
 }
 
 // 分页
-const page = reactive({ current: 1, size: 10, total: 4 })
+const page = reactive({ current: 1, size: 10 })
 
 // 弹窗
 const dialogVisible = ref(false)
@@ -159,72 +169,93 @@ const editMode = ref(false)
 const formRef = ref(null)
 const form = reactive({
   id: null,
-  studentNo: '',
+  studentId: '',
+  username: '',
+  password: '',
   name: '',
   gender: '男',
-  classId: '',
-  phone: '',
-  email: ''
+  age: '',
+  major: ''
 })
 const rules = {
-  studentNo: [{ required: true, message: '请输入学号', trigger: 'blur' }],
+  studentId: [{ required: true, message: '请输入学号', trigger: 'blur' }],
+  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
   name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
-  gender: [{ required: true, message: '请选择性别', trigger: 'change' }],
-  classId: [{ required: true, message: '请选择班级', trigger: 'change' }],
-  phone: [{ pattern: /^1[3-9]\d{9}$/, message: '手机号格式不正确', trigger: 'blur' }],
-  email: [{ type: 'email', message: '邮箱格式不正确', trigger: 'blur' }]
+  gender: [{ required: true, message: '请选择性别', trigger: 'change' }]
+}
+
+const resetForm = () => {
+  form.id = null
+  form.studentId = ''
+  form.username = ''
+  form.password = ''
+  form.name = ''
+  form.gender = '男'
+  form.age = ''
+  form.major = ''
 }
 
 const handleAdd = () => {
   editMode.value = false
-  form.id = null
-  form.studentNo = ''
-  form.name = ''
-  form.gender = '男'
-  form.classId = ''
-  form.phone = ''
-  form.email = ''
+  resetForm()
   dialogVisible.value = true
 }
 
-const handleEdit = (row) => {
+const handleEdit = async (row) => {
   editMode.value = true
-  form.id = row.id
-  form.studentNo = row.studentNo
-  form.name = row.name
-  form.gender = row.gender
-  form.classId = row.classId
-  form.phone = row.phone
-  form.email = row.email
-  dialogVisible.value = true
+  resetForm()
+  try {
+    const res = await toEditStudent(row.id)
+    const stu = res.data.stu || {}
+    form.id = stu.id
+    form.studentId = stu.studentId || ''
+    form.username = stu.username || ''
+    form.name = stu.name || ''
+    form.gender = stu.gender || '男'
+    form.age = stu.age ?? ''
+    form.major = stu.major || ''
+    dialogVisible.value = true
+  } catch (e) {
+    // 拦截器已提示
+  }
 }
 
 const handleConfirm = () => {
-  formRef.value.validate((valid) => {
+  formRef.value.validate(async (valid) => {
     if (!valid) return
-    const className = classOptions.value.find((c) => c.value === form.classId)?.label || ''
-    // TODO: 对接后端 学生新增/编辑接口
-    if (editMode.value) {
-      const row = tableData.value.find((item) => item.id === form.id)
-      if (row) {
-        Object.assign(row, { name: form.name, gender: form.gender, classId: form.classId, className, phone: form.phone, email: form.email })
+    submitting.value = true
+    try {
+      if (editMode.value) {
+        await updateStudent({
+          id: form.id,
+          studentId: form.studentId,
+          username: form.username,
+          name: form.name,
+          gender: form.gender,
+          age: form.age,
+          major: form.major
+        })
+        ElMessage.success('编辑成功')
+      } else {
+        await addStudent({
+          studentId: form.studentId,
+          username: form.username,
+          password: form.password,
+          name: form.name,
+          gender: form.gender,
+          age: form.age,
+          major: form.major
+        })
+        ElMessage.success('新增成功')
       }
-      ElMessage.success('编辑成功')
-    } else {
-      tableData.value.unshift({
-        id: Date.now(),
-        studentNo: form.studentNo,
-        name: form.name,
-        gender: form.gender,
-        classId: form.classId,
-        className,
-        phone: form.phone,
-        email: form.email,
-        status: '正常'
-      })
-      ElMessage.success('新增成功')
+      dialogVisible.value = false
+      fetchList()
+    } catch (e) {
+      // 拦截器已提示
+    } finally {
+      submitting.value = false
     }
-    dialogVisible.value = false
   })
 }
 
@@ -235,18 +266,24 @@ const handleResetPwd = (row) => {
     cancelButtonText: '取消',
     type: 'warning'
   })
-    .then(() => {
-      // TODO: 对接后端 重置学生密码接口
-      ElMessage.success('密码已重置')
+    .then(async () => {
+      try {
+        await resetStuPwd(row.id)
+        ElMessage.success('密码已重置')
+      } catch (e) {}
     })
     .catch(() => {})
 }
 
 // 启用/禁用
 const handleToggleStatus = (row) => {
-  // TODO: 对接后端 学生启用/禁用接口
-  row.status = row.status === '正常' ? '禁用' : '正常'
-  ElMessage.success(row.status === '正常' ? '已启用' : '已禁用')
+  const newStatus = Number(row.status) === 1 ? 0 : 1
+  updateStuStatus(row.id, newStatus)
+    .then(() => {
+      row.status = newStatus
+      ElMessage.success(newStatus === 1 ? '已启用' : '已禁用')
+    })
+    .catch(() => {})
 }
 
 // 删除
@@ -256,21 +293,52 @@ const handleDelete = (row) => {
     cancelButtonText: '取消',
     type: 'warning'
   })
-    .then(() => {
-      // TODO: 对接后端 学生删除接口
-      const idx = tableData.value.findIndex((item) => item.id === row.id)
-      if (idx !== -1) tableData.value.splice(idx, 1)
-      ElMessage.success('删除成功')
+    .then(async () => {
+      try {
+        await deleteStudent(row.id)
+        ElMessage.success('删除成功')
+        fetchList()
+      } catch (e) {}
     })
     .catch(() => {})
 }
 
 // 批量导入
 const importDialog = ref(false)
-const handleImport = () => {
-  // TODO: 对接后端 学生批量导入接口
-  importDialog.value = false
-  ElMessage.success('导入成功')
+const importFile = ref(null)
+const uploadRef = ref(null)
+const openImport = () => {
+  importFile.value = null
+  importDialog.value = true
+}
+const onFileChange = (file) => {
+  importFile.value = file.raw
+}
+const onFileRemove = () => {
+  importFile.value = null
+}
+const handleImportClose = () => {
+  importFile.value = null
+  uploadRef.value?.clearFiles()
+}
+const handleImport = async () => {
+  if (!importFile.value) {
+    ElMessage.warning('请先选择文件')
+    return
+  }
+  const fd = new FormData()
+  fd.append('file', importFile.value)
+  submitting.value = true
+  try {
+    await importStudent(fd)
+    ElMessage.success('导入成功')
+    importDialog.value = false
+    fetchList()
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 

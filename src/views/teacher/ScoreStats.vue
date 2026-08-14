@@ -42,7 +42,7 @@
     </el-row>
 
     <!-- 分数段分布 -->
-    <el-table :data="distribution" border stripe style="width: 100%; margin-top: 16px">
+    <el-table :data="distribution" border stripe style="width: 100%; margin-top: 16px" v-loading="loading">
       <el-table-column prop="range" label="分数段" width="160" align="center" />
       <el-table-column prop="count" label="人数" width="120" align="center" />
       <el-table-column label="占比" min-width="200">
@@ -55,61 +55,32 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
+import { getTeacherCourses } from '@/api/modules/teacher/course'
+import { getGradeStats } from '@/api/modules/teacher/score'
+import { onMounted } from 'vue'
 
 // 课程下拉
-// TODO: 对接后端 教师所授课程列表接口
-const courseOptions = ref([
-  { id: 1, courseName: '数据结构' },
-  { id: 2, courseName: '计算机网络' },
-  { id: 3, courseName: '软件工程' },
-  { id: 4, courseName: '高等数学' }
-])
+const courseOptions = ref([])
 
 const queryForm = reactive({
   courseId: ''
 })
 
-// mock 成绩列表（用于统计）
-// TODO: 对接后端 班级成绩统计接口，参数 courseId
-const scoreList = ref([88, 92, 76, 55, 95, 68, 82, 90, 45, 78, 85, 62, 99, 58, 73])
+const loading = ref(false)
 
-// 统计数据
-const stats = computed(() => {
-  const list = scoreList.value
-  if (list.length === 0) {
-    return { max: 0, min: 0, avg: 0, passRate: 0 }
-  }
-  const max = Math.max(...list)
-  const min = Math.min(...list)
-  const avg = Math.round((list.reduce((p, c) => p + c, 0) / list.length) * 10) / 10
-  const passCount = list.filter((s) => s >= 60).length
-  const passRate = Math.round((passCount / list.length) * 1000) / 10
-  return { max, min, avg, passRate }
+// 统计数据：取后端 stats 中的最高/最低/平均/及格率
+const stats = reactive({
+  max: 0,
+  min: 0,
+  avg: 0,
+  passRate: 0
 })
 
-// 分数段分布
-const distribution = computed(() => {
-  const list = scoreList.value
-  const total = list.length || 1
-  const ranges = [
-    { range: '90-100', min: 90, max: 100 },
-    { range: '80-89', min: 80, max: 89 },
-    { range: '70-79', min: 70, max: 79 },
-    { range: '60-69', min: 60, max: 69 },
-    { range: '<60', min: 0, max: 59 }
-  ]
-  return ranges.map((r) => {
-    const count = list.filter((s) => s >= r.min && s <= r.max).length
-    return {
-      range: r.range,
-      count,
-      percent: Math.round((count / total) * 1000) / 10
-    }
-  })
-})
+// 分数段分布：取后端 stats 中的分布数据
+const distribution = ref([])
 
 // 分数段颜色
 const rangeColor = (range) => {
@@ -123,11 +94,56 @@ const rangeColor = (range) => {
   return map[range] || '#409eff'
 }
 
+// 拉取课程下拉
+const fetchCourses = async () => {
+  try {
+    const res = await getTeacherCourses()
+    courseOptions.value = res.data?.courseList || []
+  } catch (e) {
+    // 拦截器已提示
+  }
+}
+
+// 拉取成绩统计
+const fetchStats = async () => {
+  if (!queryForm.courseId) {
+    ElMessage.warning('请先选择课程')
+    return
+  }
+  loading.value = true
+  try {
+    const res = await getGradeStats(queryForm.courseId)
+    const s = res.data?.stats || {}
+    stats.max = s.max ?? s.maxScore ?? 0
+    stats.min = s.min ?? s.minScore ?? 0
+    stats.avg = s.avg ?? s.average ?? 0
+    stats.passRate = s.passRate ?? s.passingRate ?? 0
+    // 分数段分布：兼容字段名 range/label/segment、count/num、percent/ratio
+    const total = (s.distribution || []).reduce((sum, it) => sum + (it.count ?? it.num ?? 0), 0) || 1
+    distribution.value = (s.distribution || []).map((it) => {
+      const count = it.count ?? it.num ?? 0
+      const percent = it.percent ?? it.ratio ?? Math.round((count / total) * 1000) / 10
+      return {
+        range: it.range ?? it.label ?? it.segment ?? '',
+        count,
+        percent
+      }
+    })
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    loading.value = false
+  }
+}
+
 // 查询
 const handleQuery = () => {
-  // TODO: 对接后端 班级成绩统计接口
-  ElMessage.success('查询成功')
+  fetchStats()
 }
+
+onMounted(() => {
+  fetchCourses()
+})
 </script>
 
 <style scoped>

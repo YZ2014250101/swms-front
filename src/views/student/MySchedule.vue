@@ -90,7 +90,6 @@ const getScheduleData = async () => {
     if (queryWeek.value) {
       params.week = queryWeek.value
     }
-    // TODO: 对接后端课表接口
     const res = await getStudentSchedule(params)
     const data = res.data
     // 解构赋值绑定页面变量

@@ -65,13 +65,17 @@ const rules = {
 }
 
 async function handleSubmit() {
+  // 校验表单
   if (!formRef.value) return
   await formRef.value.validate(async (valid) => {
     if (!valid) return
     loading.value = true
     try {
-      // TODO: 对接后端
-      // await changePassword(form)
+      // 调用后端 PUT /common/password/change（JSON Body）
+      await changePassword({
+        oldPassword: form.oldPassword,
+        newPassword: form.newPassword
+      })
       ElMessage.success('密码修改成功')
       handleReset()
     } catch (err) {

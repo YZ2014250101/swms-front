@@ -1,81 +1,51 @@
 // src/api/modules/common/auth.js
-// 公共鉴权接口：登录、退出、验证码、修改密码
+// 公共鉴权接口：三端登录、退出、检查登录、修改密码
+// 后端登录按角色分接口：/student/doLogin、/teacher/doLogin、/admin/doLogin
 import request from '../../request'
 
-// 登录（统一入口，后端按 userType 区分角色）
+
+/**
+ * 统一登录（按 role 调对应接口）
+ * @param {string} role student/teacher/admin
+ * @param {object} data { username, password }
+ * @returns 返回 data: { token, role, userId, name, studentId|teacherId|adminId }
+ */
 export function login(data) {
-  // 根据前端选择的身份，匹配后端不同Controller接口
-  const { userType } = data
-  let url = ''
-  let method = 'post'
-  let params = null
-  let bodyData = null
-
-  if (userType === 'student') {
-    // 学生登录：POST /student/doLogin，参数拼在URL问号后面（后端只接收Query参数）
-    url = '/student/doLogin'
-    params = {
-      username: data.username,
-      password: data.password
-    }
-  } else if (userType === 'teacher') {
-    // 后续老师登录接口预留
-    url = '/teacher/doLogin'
-    params = {
-      username: data.username,
-      password: data.password
-    }
-  } else if (userType === 'admin') {
-    // 管理员登录接口预留
-    url = '/admin/doLogin'
-    params = {
-      username: data.username,
-      password: data.password
-    }
-  } else {
-    // 默认公共登录（兜底）
-    url = '/common/login'
-    bodyData = data
-  }
-
   return request({
-    url,
-    method,
-    data: bodyData, // 请求体，学生模式传null
-    params // Query参数，学生模式传递账号密码
+    url: '/login',
+    method: 'post',
+    data,  // ✅ data 放到请求body里，JSON格式传输
+    headers: { 'Content-Type': 'application/json' }
+
   })
 }
 
-// 退出登录（原样保留）
-export function logout() {
+// 退出登录
+export function logout(role) {
   return request({
-    url: '/common/logout',
-    method: 'post'
-  })
-}
-
-// 获取当前登录用户信息（原样保留）
-export function getUserInfo() {
-  return request({
-    url: '/common/userInfo',
+    url: '/logout',
     method: 'get'
   })
 }
 
-// 修改密码（原样保留）
-export function changePassword(data) {
+// 检查登录状态
+export function checkLogin(role) {
   return request({
-    url: '/common/password',
-    method: 'put',
-    data
+    url: '/checkLogin',
+    method: 'get'
   })
 }
 
-// 修改个人信息（原样保留）
-export function updateProfile(data) {
+/**
+ * 修改密码（三角色共用，后端根据 token 中 role 自动判断）
+ * 注意：此接口用 JSON Body
+ * @param {object} data { oldPassword, newPassword }
+ */
+export function changePassword(data) {
   return request({
-    url: '/common/profile',
+    url: '/common/password/change',
     method: 'put',
-    data
+    data,
+    headers: { 'Content-Type': 'application/json' }
   })
 }

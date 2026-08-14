@@ -16,7 +16,7 @@
       </el-form-item>
     </el-form>
 
-    <el-table :data="tableData" border stripe style="width: 100%">
+    <el-table :data="tableData" border stripe style="width: 100%" v-loading="loading">
       <el-table-column prop="studentNo" label="学号" width="130" />
       <el-table-column prop="name" label="姓名" width="110" />
       <el-table-column label="出勤状态" width="160" align="center">
@@ -43,15 +43,11 @@
 import { ref, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Search, Check } from '@element-plus/icons-vue'
+import { getAttendanceManagement, attendanceCheck, batchSaveAttendance } from '@/api/modules/teacher/attendance'
+import { onMounted } from 'vue'
 
-// 课程下拉
-// TODO: 对接后端 教师所授课程列表接口
-const courseOptions = ref([
-  { id: 1, courseName: '数据结构' },
-  { id: 2, courseName: '计算机网络' },
-  { id: 3, courseName: '软件工程' },
-  { id: 4, courseName: '高等数学' }
-])
+// 课程下拉：来自考勤管理首页
+const courseOptions = ref([])
 
 // 出勤状态选项
 const statusOptions = [
@@ -66,24 +62,53 @@ const queryForm = reactive({
   date: ''
 })
 
-// mock 考勤名单
-// TODO: 对接后端 考勤名单接口，参数 courseId / date
-const tableData = ref([
-  { id: 1, studentNo: '20230101', name: '张三', status: '出勤', remark: '' },
-  { id: 2, studentNo: '20230102', name: '李四', status: '迟到', remark: '迟到 10 分钟' },
-  { id: 3, studentNo: '20230103', name: '王芳', status: '出勤', remark: '' },
-  { id: 4, studentNo: '20230104', name: '刘洋', status: '缺勤', remark: '请假未到' },
-  { id: 5, studentNo: '20230105', name: '赵敏', status: '早退', remark: '提前离开' }
-])
+const loading = ref(false)
+const tableData = ref([])
+
+// 拉取课程下拉
+const fetchCourses = async () => {
+  try {
+    const res = await getAttendanceManagement()
+    courseOptions.value = res.data?.courseList || []
+  } catch (e) {
+    // 拦截器已提示
+  }
+}
+
+// 拉取考勤名单
+const fetchAttendance = async () => {
+  if (!queryForm.courseId) {
+    ElMessage.warning('请先选择课程')
+    return
+  }
+  loading.value = true
+  try {
+    const res = await attendanceCheck(queryForm.courseId)
+    const data = res.data || {}
+    const attendanceList = data.attendanceList || []
+    // 将已有考勤记录合并到学生行，默认状态"出勤"
+    tableData.value = (data.studentList || []).map((stu) => {
+      const record = attendanceList.find((a) => (a.studentId || a.studentNo) === (stu.studentId || stu.studentNo))
+      return {
+        ...stu,
+        status: record?.status || '出勤',
+        remark: record?.remark || ''
+      }
+    })
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    loading.value = false
+  }
+}
 
 // 查询
 const handleQuery = () => {
-  // TODO: 对接后端 考勤名单接口
-  ElMessage.success('查询成功')
+  fetchAttendance()
 }
 
 // 提交考勤
-const handleSubmit = () => {
+const handleSubmit = async () => {
   if (!queryForm.courseId) {
     ElMessage.warning('请先选择课程')
     return
@@ -92,9 +117,27 @@ const handleSubmit = () => {
     ElMessage.warning('请先选择日期')
     return
   }
-  // TODO: 对接后端 提交考勤接口
-  ElMessage.success(`已提交 ${tableData.value.length} 名学生的考勤记录`)
+  if (tableData.value.length === 0) {
+    ElMessage.warning('没有可提交的考勤记录')
+    return
+  }
+  try {
+    await batchSaveAttendance({
+      studentIds: tableData.value.map((r) => r.studentId || r.id),
+      courseId: queryForm.courseId,
+      attendanceDate: queryForm.date,
+      statuses: tableData.value.map((r) => r.status)
+    })
+    ElMessage.success(`已提交 ${tableData.value.length} 名学生的考勤记录`)
+    fetchAttendance()
+  } catch (e) {
+    // 拦截器已提示
+  }
 }
+
+onMounted(() => {
+  fetchCourses()
+})
 </script>
 
 <style scoped>

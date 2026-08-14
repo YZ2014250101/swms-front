@@ -34,15 +34,26 @@
 </template>
 
 <script setup>
-import { reactive } from 'vue'
+import { reactive, onMounted } from 'vue'
+import { getTeacherCourses } from '@/api/modules/teacher/course'
 
-// TODO: 对接后端首页统计接口
 const cards = reactive([
   { title: '授课门数', value: 0, icon: 'Reading', color: '#409eff' },
   { title: '授课学生', value: 0, icon: 'User', color: '#67c23a' },
   { title: '待批作业', value: 0, icon: 'Edit', color: '#e6a23c' },
   { title: '未读消息', value: 0, icon: 'Bell', color: '#f56c6c' }
 ])
+
+async function loadOverview() {
+  try {
+    const res = await getTeacherCourses()
+    cards[0].value = (res.data?.courseList || []).length
+  } catch (e) {
+    // 拦截器已提示
+  }
+}
+
+onMounted(loadOverview)
 </script>
 
 <style scoped>

@@ -2,7 +2,7 @@
 <!-- 系统设置，配置网站名称、登录背景、版权、上传限制、通知规则 -->
 <template>
   <el-card shadow="never">
-    <el-form ref="formRef" :model="form" :rules="rules" label-width="140px" style="max-width: 640px">
+    <el-form ref="formRef" :model="form" :rules="rules" label-width="140px" style="max-width: 640px" v-loading="loading">
       <el-form-item label="网站名称" prop="siteName">
         <el-input v-model="form.siteName" placeholder="请输入网站名称" />
       </el-form-item>
@@ -43,7 +43,7 @@
       </el-form-item>
 
       <el-form-item>
-        <el-button type="primary" :icon="Setting" @click="handleSave">保存设置</el-button>
+        <el-button type="primary" :icon="Setting" :loading="submitting" @click="handleSave">保存设置</el-button>
         <el-button @click="handleReset">重置</el-button>
       </el-form-item>
     </el-form>
@@ -51,21 +51,25 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, Setting } from '@element-plus/icons-vue'
+import { getSystemConfig, saveSystemConfig } from '@/api/modules/admin/system'
 
 // 允许上传格式选项
 const formatOptions = ref(['jpg', 'png', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'zip'])
 
+const loading = ref(false)
+const submitting = ref(false)
+
 // 表单
 const formRef = ref(null)
 const form = reactive({
-  siteName: '教务管理系统',
+  siteName: '',
   loginBg: '',
-  copyright: '© 2025 教务管理系统 版权所有',
+  copyright: '',
   uploadLimit: 10,
-  allowFormats: ['jpg', 'png', 'pdf'],
+  allowFormats: [],
   notify: true
 })
 const rules = {
@@ -74,24 +78,60 @@ const rules = {
   uploadLimit: [{ required: true, message: '请设置上传大小限制', trigger: 'change' }]
 }
 
+// 拉取系统配置
+const fetchConfig = async () => {
+  loading.value = true
+  try {
+    const res = await getSystemConfig()
+    const config = res.data.config || {}
+    form.siteName = config.siteName ?? ''
+    form.loginBg = config.loginBg ?? ''
+    form.copyright = config.copyright ?? ''
+    form.uploadLimit = config.uploadLimit ?? 10
+    form.allowFormats = Array.isArray(config.allowFormats) ? config.allowFormats : []
+    form.notify = config.notify ?? true
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  fetchConfig()
+})
+
 // 登录背景上传
 const handleBgChange = (file) => {
-  // TODO: 对接后端 登录背景上传接口
   form.loginBg = URL.createObjectURL(file.raw)
 }
 
 // 保存
 const handleSave = () => {
-  formRef.value.validate((valid) => {
+  formRef.value.validate(async (valid) => {
     if (!valid) return
-    // TODO: 对接后端 系统设置保存接口
-    ElMessage.success('保存成功')
+    submitting.value = true
+    try {
+      await saveSystemConfig({
+        siteName: form.siteName,
+        loginBg: form.loginBg,
+        copyright: form.copyright,
+        uploadLimit: form.uploadLimit,
+        allowFormats: form.allowFormats,
+        notify: form.notify
+      })
+      ElMessage.success('保存成功')
+    } catch (e) {
+      // 拦截器已提示
+    } finally {
+      submitting.value = false
+    }
   })
 }
 
 // 重置
 const handleReset = () => {
-  formRef.value.resetFields()
+  fetchConfig()
 }
 </script>
 

@@ -19,9 +19,6 @@
         </span>
         <template #dropdown>
           <el-dropdown-menu>
-            <el-dropdown-item command="profile">
-              <el-icon><User /></el-icon>个人信息
-            </el-dropdown-item>
             <el-dropdown-item command="password">
               <el-icon><Lock /></el-icon>修改密码
             </el-dropdown-item>
@@ -45,6 +42,7 @@ import { ElMessageBox, ElMessage } from 'element-plus'
 import { UserFilled } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/modules/user'
 import { useAppStore } from '@/store/modules/app'
+import { logout } from '@/api/modules/common/auth'
 
 const props = defineProps({
   collapsed: { type: Boolean, default: false }
@@ -84,7 +82,13 @@ function handleLogout() {
     cancelButtonText: '取消',
     type: 'warning'
   })
-    .then(() => {
+    .then(async () => {
+      // 通知后端退出（失败不阻塞，前端仍清除登录态）
+      try {
+        await logout(userStore.role)
+      } catch (e) {
+        console.warn('后端退出接口异常，仍清除前端登录态', e)
+      }
       userStore.logoutAction()
       ElMessage.success('已退出登录')
       router.push('/login')

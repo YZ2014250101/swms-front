@@ -54,10 +54,8 @@ function typeTag(t) {
 async function loadData() {
   loading.value = true
   try {
-    // TODO: 对接后端
-    // const res = await getNoticeList()
-    // tableData.value = res.data
-    tableData.value = []
+    const res = await getNoticeList()
+    tableData.value = res.data?.list || []
   } catch (err) {
     console.error(err)
   } finally {
@@ -67,8 +65,7 @@ async function loadData() {
 
 async function handleRead(row) {
   try {
-    // TODO: 对接后端
-    // await readNotice(row.id)
+    await readNotice(row.id)
     row.isRead = 1
     ElMessage.success('已标记为已读')
   } catch (err) {
@@ -79,8 +76,7 @@ async function handleRead(row) {
 function handleClear() {
   ElMessageBox.confirm('确定清空所有消息吗？', '提示', { type: 'warning' })
     .then(async () => {
-      // TODO: 对接后端
-      // await clearNotice()
+      await clearNotice()
       tableData.value = []
       ElMessage.success('已清空')
     })

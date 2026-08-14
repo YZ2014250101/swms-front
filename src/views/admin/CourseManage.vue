@@ -1,16 +1,14 @@
 <!-- src/views/admin/CourseManage.vue -->
-<!-- 课程资源管理，支持增删改查、选课开关、下架 -->
+<!-- 课程资源管理：新增、单课程选课开关、全局选课开关、选课时间设置、考试时间设置 -->
 <template>
   <el-card shadow="never">
     <!-- 搜索栏 -->
     <el-form :inline="true" :model="searchForm" class="search-form">
       <el-form-item label="课程名">
-        <el-input v-model="searchForm.name" placeholder="请输入课程名" clearable />
+        <el-input v-model="searchForm.courseName" placeholder="请输入课程名" clearable />
       </el-form-item>
-      <el-form-item label="分类">
-        <el-select v-model="searchForm.category" placeholder="请选择分类" clearable>
-          <el-option v-for="item in categoryOptions" :key="item" :label="item" :value="item" />
-        </el-select>
+      <el-form-item label="课程编号">
+        <el-input v-model="searchForm.courseNo" placeholder="请输入课程编号" clearable />
       </el-form-item>
       <el-form-item>
         <el-button type="primary" :icon="Search" @click="handleSearch">查询</el-button>
@@ -20,32 +18,36 @@
 
     <!-- 操作栏 -->
     <div class="toolbar">
+      <el-form-item label="全局选课" style="margin-right: 12px">
+        <el-switch :model-value="globalSelectable === 1" @change="handleToggleGlobal" active-text="开" inactive-text="关" />
+      </el-form-item>
+      <el-button type="warning" :icon="Clock" @click="openSelectTime">选课时间设置</el-button>
       <el-button type="primary" :icon="Plus" @click="handleAdd">新增</el-button>
     </div>
 
     <!-- 列表 -->
-    <el-table :data="tableData" border stripe style="width: 100%; margin-top: 16px">
+    <el-table :data="filteredList" border stripe v-loading="loading" style="width: 100%; margin-top: 16px">
       <el-table-column prop="courseNo" label="课程编号" width="120" />
-      <el-table-column prop="name" label="课程名称" min-width="160" />
-      <el-table-column prop="category" label="分类" width="110" />
+      <el-table-column prop="courseName" label="课程名称" min-width="160" />
+      <el-table-column label="授课教师" width="120">
+        <template #default="{ row }">{{ teacherName(row.teacherId) }}</template>
+      </el-table-column>
       <el-table-column prop="credit" label="学分" width="80" align="center" />
       <el-table-column prop="hours" label="学时" width="80" align="center" />
-      <el-table-column prop="teacher" label="授课教师" width="110" />
-      <el-table-column prop="classroom" label="上课教室" width="120" />
+      <el-table-column label="容量" width="110" align="center">
+        <template #default="{ row }">{{ row.selectedNum ?? 0 }} / {{ row.maxNum ?? 0 }}</template>
+      </el-table-column>
       <el-table-column label="选课状态" width="110" align="center">
         <template #default="{ row }">
-          <el-switch
-            v-model="row.openSelect"
-            :active-text="row.openSelect ? '开启' : ''"
-            @change="handleToggleSelect(row)"
-          />
+          <el-switch :model-value="Number(row.selectable) === 1" @change="(val) => handleToggleSelectable(row, val)" />
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="200" align="center" fixed="right">
+      <el-table-column label="考试时间" min-width="240">
+        <template #default="{ row }">{{ examTimeText(row) }}</template>
+      </el-table-column>
+      <el-table-column label="操作" width="130" align="center" fixed="right">
         <template #default="{ row }">
-          <el-button type="primary" link size="small" @click="handleEdit(row)">编辑</el-button>
-          <el-button type="warning" link size="small" @click="handleOffShelf(row)">{{ row.shelf ? '下架' : '上架' }}</el-button>
-          <el-button type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
+          <el-button type="primary" link size="small" @click="openExamTime(row)">设置考试时间</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -55,193 +57,383 @@
       v-model:current-page="page.current"
       v-model:page-size="page.size"
       :page-sizes="[10, 20, 50]"
-      :total="page.total"
+      :total="filteredList.length"
       layout="total, sizes, prev, pager, next, jumper"
       background
     />
 
-    <!-- 新增/编辑弹窗 -->
-    <el-dialog v-model="dialogVisible" :title="editMode ? '编辑课程' : '新增课程'" width="560px">
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
+    <!-- 新增弹窗 -->
+    <el-dialog v-model="dialogVisible" title="新增课程" width="600px">
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
         <el-form-item label="课程编号" prop="courseNo">
-          <el-input v-model="form.courseNo" placeholder="请输入课程编号" :disabled="editMode" />
+          <el-input v-model="form.courseNo" placeholder="请输入课程编号" />
         </el-form-item>
-        <el-form-item label="课程名称" prop="name">
-          <el-input v-model="form.name" placeholder="请输入课程名称" />
+        <el-form-item label="课程名称" prop="courseName">
+          <el-input v-model="form.courseName" placeholder="请输入课程名称" />
         </el-form-item>
-        <el-form-item label="分类" prop="category">
-          <el-select v-model="form.category" placeholder="请选择分类" style="width: 100%">
-            <el-option v-for="item in categoryOptions" :key="item" :label="item" :value="item" />
+        <el-form-item label="授课教师" prop="teacherId">
+          <el-select v-model="form.teacherId" placeholder="请选择授课教师" filterable style="width: 100%">
+            <el-option v-for="item in teacherList" :key="item.id" :label="item.name + (item.teacherId ? '(' + item.teacherId + ')' : '')" :value="item.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="学分" prop="credit">
-          <el-input-number v-model="form.credit" :min="0.5" :max="10" :step="0.5" controls-position="right" />
+          <el-input-number v-model="form.credit" :min="1" :max="10" controls-position="right" />
         </el-form-item>
         <el-form-item label="学时" prop="hours">
           <el-input-number v-model="form.hours" :min="8" :max="120" controls-position="right" />
         </el-form-item>
-        <el-form-item label="授课教师" prop="teacher">
-          <el-input v-model="form.teacher" placeholder="请输入授课教师" />
+        <el-form-item label="人数上限" prop="maxNum">
+          <el-input-number v-model="form.maxNum" :min="1" :max="500" controls-position="right" />
+        </el-form-item>
+        <el-form-item label="上课星期" prop="weekDay">
+          <el-select v-model="form.weekDay" placeholder="请选择星期" style="width: 100%">
+            <el-option v-for="d in weekDayOptions" :key="d.value" :label="d.label" :value="d.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="节次" prop="sections">
+          <el-col :span="11">
+            <el-select v-model="form.startSection" placeholder="开始节次">
+              <el-option v-for="n in 12" :key="n" :label="`第${n}节`" :value="n" />
+            </el-select>
+          </el-col>
+          <el-col :span="2" style="text-align: center">至</el-col>
+          <el-col :span="11">
+            <el-select v-model="form.endSection" placeholder="结束节次">
+              <el-option v-for="n in 12" :key="n" :label="`第${n}节`" :value="n" />
+            </el-select>
+          </el-col>
         </el-form-item>
         <el-form-item label="上课教室" prop="classroom">
           <el-input v-model="form.classroom" placeholder="请输入上课教室" />
         </el-form-item>
-        <el-form-item label="上课周期" prop="schedule">
-          <el-input v-model="form.schedule" placeholder="如：周一 1-2节" />
+        <el-form-item label="上课周次" prop="weekRange">
+          <el-input v-model="form.weekRange" placeholder="如：1-16" />
+        </el-form-item>
+        <el-form-item label="课程简介" prop="intro">
+          <el-input v-model="form.intro" type="textarea" :rows="3" placeholder="请输入课程简介" />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleConfirm">确认</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleConfirm">确认</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 选课时间设置弹窗 -->
+    <el-dialog v-model="selectTimeDialog" title="选课时间设置" width="520px">
+      <el-form label-width="100px">
+        <el-form-item label="选课时间段">
+          <el-date-picker
+            v-model="selectTimeForm.range"
+            type="datetimerange"
+            range-separator="至"
+            start-placeholder="开始时间"
+            end-placeholder="结束时间"
+            value-format="YYYY-MM-DD HH:mm:ss"
+            style="width: 100%"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button type="danger" @click="handleClearSelectTime">清空</el-button>
+        <el-button @click="selectTimeDialog = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSaveSelectTime">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 考试时间设置弹窗 -->
+    <el-dialog v-model="examTimeDialog" title="设置考试时间" width="520px">
+      <el-form label-width="100px">
+        <el-form-item label="课程">
+          <span>{{ currentCourse.courseName }}</span>
+        </el-form-item>
+        <el-form-item label="考试开始">
+          <el-date-picker v-model="examTimeForm.examStartTime" type="datetime" placeholder="请选择考试开始时间" value-format="YYYY-MM-DD HH:mm:ss" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="考试结束">
+          <el-date-picker v-model="examTimeForm.examEndTime" type="datetime" placeholder="请选择考试结束时间" value-format="YYYY-MM-DD HH:mm:ss" style="width: 100%" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="examTimeDialog = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSaveExamTime">保存</el-button>
       </template>
     </el-dialog>
   </el-card>
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Refresh, Plus } from '@element-plus/icons-vue'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
+import { Search, Refresh, Plus, Clock } from '@element-plus/icons-vue'
+import {
+  getCourseList,
+  toAddCourse,
+  addCourse,
+  toggleSelectable,
+  toggleGlobalSelectable,
+  toSetSelectTime,
+  setSelectTime,
+  clearSelectTime,
+  toSetExamTime,
+  saveExamTime
+} from '@/api/modules/admin/course'
 
-// 课程分类
-const categoryOptions = ref(['必修课', '专业选修课', '公共选修课', '实验课'])
+const loading = ref(false)
+const submitting = ref(false)
+const tableData = ref([])
+const teacherList = ref([])
+const globalSelectable = ref(0)
 
-// mock 课程列表
-// TODO: 对接后端 课程列表接口
-const tableData = ref([
-  { id: 1, courseNo: 'CS101', name: '数据结构', category: '必修课', credit: 4, hours: 64, teacher: '刘老师', classroom: 'A101', schedule: '周一 1-2节', openSelect: true, shelf: true },
-  { id: 2, courseNo: 'CS102', name: '计算机网络', category: '必修课', credit: 3, hours: 48, teacher: '陈老师', classroom: 'A102', schedule: '周二 3-4节', openSelect: false, shelf: true },
-  { id: 3, courseNo: 'CS201', name: '软件工程', category: '专业选修课', credit: 3, hours: 48, teacher: '杨老师', classroom: 'B201', schedule: '周三 5-6节', openSelect: true, shelf: true },
-  { id: 4, courseNo: 'CS301', name: '人工智能导论', category: '公共选修课', credit: 2, hours: 32, teacher: '赵老师', classroom: 'C301', schedule: '周四 7-8节', openSelect: false, shelf: false }
-])
+const weekDayOptions = [
+  { value: 1, label: '周一' },
+  { value: 2, label: '周二' },
+  { value: 3, label: '周三' },
+  { value: 4, label: '周四' },
+  { value: 5, label: '周五' },
+  { value: 6, label: '周六' },
+  { value: 7, label: '周日' }
+]
+
+const teacherName = (id) => {
+  if (!id) return ''
+  const t = teacherList.value.find((item) => item.id === id)
+  return t ? t.name : id
+}
+
+const examTimeText = (row) => {
+  if (!row.examStartTime && !row.examEndTime) return '未设置'
+  return `${row.examStartTime || ''} ~ ${row.examEndTime || ''}`
+}
+
+const fetchList = async () => {
+  loading.value = true
+  try {
+    const res = await getCourseList()
+    tableData.value = res.data.courseList || []
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    loading.value = false
+  }
+}
+
+// 拉取教师列表 + 全局选课开关 + 选课时间
+const fetchAux = async () => {
+  try {
+    const res = await toAddCourse()
+    teacherList.value = res.data.teacherList || []
+  } catch (e) {}
+  try {
+    const res = await toSetSelectTime()
+    globalSelectable.value = Number(res.data.globalSelectable) || 0
+  } catch (e) {}
+}
+
+onMounted(async () => {
+  await fetchList()
+  fetchAux()
+})
 
 // 搜索
-const searchForm = reactive({ name: '', category: '' })
+const searchForm = reactive({ courseName: '', courseNo: '' })
+const filteredList = computed(() => {
+  return tableData.value.filter((row) => {
+    if (searchForm.courseName && !(row.courseName || '').includes(searchForm.courseName)) return false
+    if (searchForm.courseNo && !(row.courseNo || '').includes(searchForm.courseNo)) return false
+    return true
+  })
+})
 const handleSearch = () => {
-  // TODO: 对接后端 课程列表查询接口
-  ElMessage.success('查询成功')
+  page.current = 1
 }
 const handleReset = () => {
-  searchForm.name = ''
-  searchForm.category = ''
+  searchForm.courseName = ''
+  searchForm.courseNo = ''
 }
 
 // 分页
-const page = reactive({ current: 1, size: 10, total: 4 })
+const page = reactive({ current: 1, size: 10 })
 
-// 弹窗
+// 新增弹窗
 const dialogVisible = ref(false)
-const editMode = ref(false)
 const formRef = ref(null)
 const form = reactive({
-  id: null,
   courseNo: '',
-  name: '',
-  category: '',
+  courseName: '',
+  teacherId: '',
   credit: 2,
   hours: 32,
-  teacher: '',
+  maxNum: 60,
+  weekDay: '',
+  startSection: '',
+  endSection: '',
   classroom: '',
-  schedule: ''
+  weekRange: '',
+  intro: ''
 })
 const rules = {
   courseNo: [{ required: true, message: '请输入课程编号', trigger: 'blur' }],
-  name: [{ required: true, message: '请输入课程名称', trigger: 'blur' }],
-  category: [{ required: true, message: '请选择分类', trigger: 'change' }],
-  teacher: [{ required: true, message: '请输入授课教师', trigger: 'blur' }]
+  courseName: [{ required: true, message: '请输入课程名称', trigger: 'blur' }],
+  teacherId: [{ required: true, message: '请选择授课教师', trigger: 'change' }],
+  maxNum: [{ required: true, message: '请输入人数上限', trigger: 'blur' }]
 }
 
-const handleAdd = () => {
-  editMode.value = false
-  form.id = null
+const resetForm = () => {
   form.courseNo = ''
-  form.name = ''
-  form.category = ''
+  form.courseName = ''
+  form.teacherId = ''
   form.credit = 2
   form.hours = 32
-  form.teacher = ''
+  form.maxNum = 60
+  form.weekDay = ''
+  form.startSection = ''
+  form.endSection = ''
   form.classroom = ''
-  form.schedule = ''
-  dialogVisible.value = true
+  form.weekRange = ''
+  form.intro = ''
 }
 
-const handleEdit = (row) => {
-  editMode.value = true
-  form.id = row.id
-  form.courseNo = row.courseNo
-  form.name = row.name
-  form.category = row.category
-  form.credit = row.credit
-  form.hours = row.hours
-  form.teacher = row.teacher
-  form.classroom = row.classroom
-  form.schedule = row.schedule
+const handleAdd = async () => {
+  resetForm()
+  try {
+    const res = await toAddCourse()
+    teacherList.value = res.data.teacherList || teacherList.value
+  } catch (e) {}
   dialogVisible.value = true
 }
 
 const handleConfirm = () => {
-  formRef.value.validate((valid) => {
+  formRef.value.validate(async (valid) => {
     if (!valid) return
-    // TODO: 对接后端 课程新增/编辑接口
-    if (editMode.value) {
-      const row = tableData.value.find((item) => item.id === form.id)
-      if (row) Object.assign(row, form)
-      ElMessage.success('编辑成功')
-    } else {
-      tableData.value.unshift({
-        id: Date.now(),
+    submitting.value = true
+    try {
+      await addCourse({
         courseNo: form.courseNo,
-        name: form.name,
-        category: form.category,
+        courseName: form.courseName,
+        teacherId: form.teacherId,
         credit: form.credit,
-        hours: form.hours,
-        teacher: form.teacher,
+        maxNum: form.maxNum,
+        weekDay: form.weekDay,
+        startSection: form.startSection,
+        endSection: form.endSection,
         classroom: form.classroom,
-        schedule: form.schedule,
-        openSelect: false,
-        shelf: true
+        weekRange: form.weekRange,
+        hours: form.hours,
+        intro: form.intro
       })
       ElMessage.success('新增成功')
+      dialogVisible.value = false
+      fetchList()
+    } catch (e) {
+      // 拦截器已提示
+    } finally {
+      submitting.value = false
     }
-    dialogVisible.value = false
   })
 }
 
-// 选课开关
-const handleToggleSelect = (row) => {
-  // TODO: 对接后端 课程选课开关接口
-  ElMessage.success(row.openSelect ? '已开启选课' : '已关闭选课')
-}
-
-// 下架/上架
-const handleOffShelf = (row) => {
-  ElMessageBox.confirm(`确认要${row.shelf ? '下架' : '上架'}课程【${row.name}】吗？`, '操作确认', {
-    confirmButtonText: '确认',
-    cancelButtonText: '取消',
-    type: 'warning'
-  })
+// 单课程选课开关
+const handleToggleSelectable = (row, val) => {
+  const next = val ? 1 : 0
+  toggleSelectable(row.id, next)
     .then(() => {
-      // TODO: 对接后端 课程上下架接口
-      row.shelf = !row.shelf
-      ElMessage.success(row.shelf ? '已上架' : '已下架')
+      row.selectable = next
+      ElMessage.success(next === 1 ? '已开启选课' : '已关闭选课')
+    })
+    .catch(() => {
+      // 失败保持原状
+    })
+}
+
+// 全局选课开关
+const handleToggleGlobal = (val) => {
+  const next = val ? 1 : 0
+  toggleGlobalSelectable(next)
+    .then(() => {
+      globalSelectable.value = next
+      ElMessage.success(next === 1 ? '已开启全局选课' : '已关闭全局选课')
     })
     .catch(() => {})
 }
 
-// 删除
-const handleDelete = (row) => {
-  ElMessageBox.confirm(`确认要删除课程【${row.name}】吗？`, '删除确认', {
-    confirmButtonText: '确认删除',
-    cancelButtonText: '取消',
-    type: 'warning'
-  })
-    .then(() => {
-      // TODO: 对接后端 课程删除接口
-      const idx = tableData.value.findIndex((item) => item.id === row.id)
-      if (idx !== -1) tableData.value.splice(idx, 1)
-      ElMessage.success('删除成功')
-    })
-    .catch(() => {})
+// 选课时间设置
+const selectTimeDialog = ref(false)
+const selectTimeForm = reactive({ range: [] })
+const openSelectTime = async () => {
+  selectTimeForm.range = []
+  try {
+    const res = await toSetSelectTime()
+    globalSelectable.value = Number(res.data.globalSelectable) || 0
+    if (res.data.selectStartTime && res.data.selectEndTime) {
+      selectTimeForm.range = [res.data.selectStartTime, res.data.selectEndTime]
+    }
+  } catch (e) {}
+  selectTimeDialog.value = true
+}
+const handleSaveSelectTime = async () => {
+  if (!selectTimeForm.range || selectTimeForm.range.length !== 2 || !selectTimeForm.range[0] || !selectTimeForm.range[1]) {
+    ElMessage.warning('请选择完整的选课时间段')
+    return
+  }
+  submitting.value = true
+  try {
+    await setSelectTime(selectTimeForm.range[0], selectTimeForm.range[1])
+    ElMessage.success('选课时间设置成功')
+    selectTimeDialog.value = false
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    submitting.value = false
+  }
+}
+const handleClearSelectTime = async () => {
+  submitting.value = true
+  try {
+    await clearSelectTime()
+    ElMessage.success('已清空选课时间')
+    selectTimeForm.range = []
+    selectTimeDialog.value = false
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    submitting.value = false
+  }
+}
+
+// 考试时间设置
+const examTimeDialog = ref(false)
+const currentCourse = reactive({ id: null, courseName: '' })
+const examTimeForm = reactive({ examStartTime: '', examEndTime: '' })
+const openExamTime = async (row) => {
+  currentCourse.id = row.id
+  currentCourse.courseName = row.courseName
+  examTimeForm.examStartTime = ''
+  examTimeForm.examEndTime = ''
+  try {
+    const res = await toSetExamTime(row.id)
+    const course = res.data.course || {}
+    examTimeForm.examStartTime = course.examStartTime || ''
+    examTimeForm.examEndTime = course.examEndTime || ''
+  } catch (e) {}
+  examTimeDialog.value = true
+}
+const handleSaveExamTime = async () => {
+  if (!examTimeForm.examStartTime || !examTimeForm.examEndTime) {
+    ElMessage.warning('请选择完整的考试起止时间')
+    return
+  }
+  submitting.value = true
+  try {
+    await saveExamTime(currentCourse.id, examTimeForm.examStartTime, examTimeForm.examEndTime)
+    ElMessage.success('考试时间设置成功')
+    examTimeDialog.value = false
+    fetchList()
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 
@@ -252,6 +444,8 @@ const handleDelete = (row) => {
 .toolbar {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
 }
 .pagination {
   margin-top: 16px;

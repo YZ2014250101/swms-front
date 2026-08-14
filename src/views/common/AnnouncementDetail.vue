@@ -27,9 +27,11 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { getAnnouncementDetail } from '@/api/modules/common/announcement'
+import { useUserStore } from '@/store/modules/user'
 
 const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
 const loading = ref(false)
 const detail = reactive({
   title: '',
@@ -42,9 +44,9 @@ const detail = reactive({
 async function loadDetail() {
   loading.value = true
   try {
-    // TODO: 对接后端
-    // const res = await getAnnouncementDetail(route.params.id)
-    // Object.assign(detail, res.data)
+    // 按角色调公告详情接口，返回 {announcement}
+    const res = await getAnnouncementDetail(userStore.role, route.params.id)
+    Object.assign(detail, res.data?.announcement || res.data || {})
   } catch (err) {
     console.error(err)
   } finally {

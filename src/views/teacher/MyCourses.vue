@@ -13,13 +13,15 @@
       </el-form-item>
     </el-form>
 
-    <el-table :data="tableData" border stripe style="width: 100%">
-      <el-table-column prop="courseCode" label="课程编号" width="120" />
+    <el-table :data="tableData" border stripe style="width: 100%" v-loading="loading">
+      <el-table-column prop="courseNo" label="课程编号" width="120" />
       <el-table-column prop="courseName" label="课程名称" min-width="150" />
       <el-table-column prop="className" label="授课班级" width="160" />
       <el-table-column prop="credit" label="学分" width="80" align="center" />
       <el-table-column prop="hours" label="学时" width="80" align="center" />
-      <el-table-column prop="classTime" label="上课时间" min-width="180" />
+      <el-table-column label="上课时间" min-width="180">
+        <template #default="{ row }">{{ formatClassTime(row) }}</template>
+      </el-table-column>
       <el-table-column label="操作" width="200" align="center" fixed="right">
         <template #default="{ row }">
           <el-button type="primary" link size="small" @click="handleStudents(row)">学生名单</el-button>
@@ -44,10 +46,11 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
+import { getTeacherCourses } from '@/api/modules/teacher/course'
 
 const router = useRouter()
 
-// 学期下拉
+// 学期下拉（后端 myCourse 未返回学期信息，保留筛选 UI）
 const semesterOptions = ref([
   '2025-2026 第一学期',
   '2024-2025 第二学期',
@@ -62,22 +65,44 @@ const queryForm = reactive({
 const page = reactive({
   current: 1,
   size: 10,
-  total: 4
+  total: 0
 })
 
-// mock 所授课程列表
-// TODO: 对接后端 教师所授课程列表接口，参数 semester
-const tableData = ref([
-  { id: 1, courseCode: 'CS101', courseName: '数据结构', className: '计算机2301班', credit: 4, hours: 64, classTime: '周一 1-2节 教学楼A301 / 周三 3-4节 教学楼A301' },
-  { id: 2, courseCode: 'CS103', courseName: '计算机网络', className: '计算机2302班', credit: 3, hours: 48, classTime: '周二 5-6节 教学楼B205' },
-  { id: 3, courseCode: 'CS104', courseName: '软件工程', className: '软件2301班', credit: 2, hours: 32, classTime: '周五 3-4节 教学楼C102' },
-  { id: 4, courseCode: 'CS100', courseName: '高等数学', className: '计算机2301班 / 计算机2302班', credit: 5, hours: 80, classTime: '周四 1-2节 教学楼A101' }
-])
+const loading = ref(false)
+const tableData = ref([])
+
+const weekDayMap = { 1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 7: '周日' }
+
+// 拼接上课时间：优先使用后端 classTime，否则用 weekDay/startSection/endSection/classroom 组合
+const formatClassTime = (row) => {
+  if (row.classTime) return row.classTime
+  if (row.weekDay || row.startSection) {
+    const day = weekDayMap[row.weekDay] || ''
+    const section = row.startSection && row.endSection ? `${row.startSection}-${row.endSection}节` : ''
+    const room = row.classroom || ''
+    return [day, section, room].filter(Boolean).join(' ')
+  }
+  return ''
+}
+
+// 拉取所授课程列表
+const fetchCourses = async () => {
+  loading.value = true
+  try {
+    const res = await getTeacherCourses()
+    const list = res.data?.courseList || []
+    tableData.value = list
+    page.total = list.length
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    loading.value = false
+  }
+}
 
 // 查询
 const handleQuery = () => {
-  // TODO: 对接后端 教师所授课程列表接口
-  ElMessage.success('查询成功')
+  fetchCourses()
 }
 
 // 查看学生名单
@@ -89,6 +114,11 @@ const handleStudents = (row) => {
 const handleScoreEntry = (row) => {
   router.push({ name: 'ScoreEntry', query: { courseId: row.id, courseName: row.courseName } })
 }
+
+import { onMounted } from 'vue'
+onMounted(() => {
+  fetchCourses()
+})
 </script>
 
 <style scoped>

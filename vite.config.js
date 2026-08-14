@@ -17,7 +17,8 @@ export default defineConfig({
       // 前端所有 /api 请求转发到后端
       '/api': {
         target: 'http://127.0.0.1:8080',
-        changeOrigin: true
+        changeOrigin: true,
+        xfwd: true // 传递X-Forwarded-For请求头
       }
     }
   }

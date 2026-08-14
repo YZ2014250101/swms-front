@@ -1,5 +1,6 @@
 <!-- src/views/teacher/MySchedule.vue -->
-<!-- 教师个人课表，按学期展示周一到周日 × 节次的课表网格 -->
+<!-- 教师个人课表：后端文档无教师课表单独接口，getTeacherSchedule 暂返回 myInfo 数据 -->
+<!-- 故页面以"暂无数据"展示，并用 getTeacherCourses 的 courseList 简单展示授课时间 -->
 <template>
   <el-card shadow="never">
     <div class="filter-bar">
@@ -9,41 +10,27 @@
       </el-select>
     </div>
 
-    <table class="schedule-table" border="1" cellpadding="6" cellspacing="0">
-      <thead>
-        <tr>
-          <th>节次</th>
-          <th>周一</th>
-          <th>周二</th>
-          <th>周三</th>
-          <th>周四</th>
-          <th>周五</th>
-          <th>周六</th>
-          <th>周日</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="section in sectionCount" :key="section">
-          <td class="section-num">
-            第{{ section }}节<br />
-            <small>{{ sectionTimeMap[section] }}</small>
-          </td>
-          <td v-for="day in 7" :key="day" class="course-cell">
-            <div v-if="scheduleMap[day] && scheduleMap[day][section]" class="course-box">
-              <div class="name">{{ scheduleMap[day][section].courseName }}</div>
-              <div class="room">{{ scheduleMap[day][section].className }}</div>
-              <div class="room">{{ scheduleMap[day][section].classroom }}</div>
-            </div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <!-- 后端无教师课表接口，暂无数据 -->
+    <el-empty description="教师课表（后端暂无教师课表接口，暂无数据）" v-loading="loading" />
+
+    <!-- 用授课列表简单展示授课时间 -->
+    <div class="course-time-title">授课时间一览（来源于所授课程）</div>
+    <el-table :data="courseList" border stripe style="width: 100%">
+      <el-table-column prop="courseName" label="课程名称" min-width="150" />
+      <el-table-column prop="courseNo" label="课程编号" width="130" />
+      <el-table-column label="上课时间" min-width="180">
+        <template #default="{ row }">{{ formatClassTime(row) }}</template>
+      </el-table-column>
+      <el-table-column prop="classroom" label="教室" width="140" />
+    </el-table>
   </el-card>
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { getTeacherSchedule, getTeacherCourses } from '@/api/modules/teacher/course'
+import { onMounted } from 'vue'
 
 // 学期下拉
 const semesterOptions = ref([
@@ -53,54 +40,49 @@ const semesterOptions = ref([
 ])
 const selectedSemester = ref('')
 
-// 节次数
-const sectionCount = 11
+const loading = ref(false)
+// 后端无教师课表接口，getTeacherSchedule 暂返回 myInfo 数据，此处仅调用以保持接口约定
+const teacherInfo = ref({})
+// 用所授课程列表展示授课时间
+const courseList = ref([])
 
-// 节次时间映射
-const sectionTimeMap = ref({
-  1: '08:00-08:45',
-  2: '08:55-09:40',
-  3: '10:00-10:45',
-  4: '10:55-11:40',
-  5: '14:00-14:45',
-  6: '14:55-15:40',
-  7: '16:00-16:45',
-  8: '16:55-17:40',
-  9: '19:00-19:45',
-  10: '19:55-20:40',
-  11: '20:50-21:35'
-})
-
-// mock 课表数据，结构 scheduleMap[day][section] = { courseName, className, classroom }
-// TODO: 对接后端 教师个人课表接口，参数 semester
-const scheduleMap = ref({
-  1: {
-    1: { courseName: '数据结构', className: '计算机2301班', classroom: '教学楼A301' },
-    2: { courseName: '数据结构', className: '计算机2301班', classroom: '教学楼A301' }
-  },
-  2: {
-    5: { courseName: '计算机网络', className: '计算机2302班', classroom: '教学楼B205' },
-    6: { courseName: '计算机网络', className: '计算机2302班', classroom: '教学楼B205' }
-  },
-  3: {
-    3: { courseName: '数据结构', className: '计算机2301班', classroom: '教学楼A301' },
-    4: { courseName: '数据结构', className: '计算机2301班', classroom: '教学楼A301' }
-  },
-  4: {
-    1: { courseName: '高等数学', className: '计算机2301班', classroom: '教学楼A101' },
-    2: { courseName: '高等数学', className: '计算机2301班', classroom: '教学楼A101' }
-  },
-  5: {
-    3: { courseName: '软件工程', className: '软件2301班', classroom: '教学楼C102' },
-    4: { courseName: '软件工程', className: '软件2301班', classroom: '教学楼C102' }
+const weekDayMap = { 1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 7: '周日' }
+const formatClassTime = (row) => {
+  if (row.classTime) return row.classTime
+  if (row.weekDay || row.startSection) {
+    const day = weekDayMap[row.weekDay] || ''
+    const section = row.startSection && row.endSection ? `${row.startSection}-${row.endSection}节` : ''
+    const room = row.classroom || ''
+    return [day, section, room].filter(Boolean).join(' ')
   }
-})
+  return ''
+}
+
+const fetchData = async () => {
+  loading.value = true
+  try {
+    // 后端无教师课表接口，getTeacherSchedule 暂返回 myInfo
+    const res = await getTeacherSchedule()
+    teacherInfo.value = res.data || {}
+    // 用所授课程列表展示授课时间
+    const courseRes = await getTeacherCourses()
+    courseList.value = courseRes.data?.courseList || []
+  } catch (e) {
+    // 拦截器已提示
+  } finally {
+    loading.value = false
+  }
+}
 
 // 切换学期
 const handleSemesterChange = () => {
-  // TODO: 对接后端 教师个人课表接口
-  ElMessage.success('学期已切换')
+  // 后端无教师课表接口，学期切换仅提示
+  ElMessage.info('后端暂无教师课表接口，学期切换暂无数据')
 }
+
+onMounted(() => {
+  fetchData()
+})
 </script>
 
 <style scoped>
@@ -114,41 +96,10 @@ const handleSemesterChange = () => {
   color: #606266;
   margin-right: 8px;
 }
-.schedule-table {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
-}
-.schedule-table th {
-  background: #165DFF;
-  color: #fff;
-  padding: 10px;
+.course-time-title {
+  margin: 8px 0 12px;
   font-size: 15px;
-}
-.section-num {
-  background: #f5f7fa;
-  width: 90px;
-  font-size: 13px;
-  text-align: center;
-}
-.course-cell {
-  height: 70px;
-  vertical-align: top;
-  padding: 4px;
-}
-.course-box {
-  background: #e8f3ff;
-  padding: 4px;
-  border-radius: 4px;
-  font-size: 13px;
-  border-left: 3px solid #165DFF;
-}
-.course-box .name {
-  font-weight: bold;
-  color: #0056b3;
-}
-.course-box .room {
-  color: #606266;
-  margin-top: 2px;
+  font-weight: 600;
+  color: #303133;
 }
 </style>

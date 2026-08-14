@@ -5,12 +5,6 @@ import Login from '@/views/login/Login.vue'
 // 公共子路由（挂到各端布局 children 下，path 为相对路径）
 export const commonChildren = [
   {
-    path: 'profile',
-    name: 'Profile',
-    component: () => import('@/views/common/Profile.vue'),
-    meta: { title: '个人信息' }
-  },
-  {
     path: 'password',
     name: 'Password',
     component: () => import('@/views/common/Password.vue'),
