@@ -40,7 +40,8 @@ async function loadData() {
   try {
     // 按角色调对应公告列表接口
     // 返回 {announcementList, tab?}
-    const res = await getAnnouncementList(userStore.role)
+    console.log('啊啊啊啊啊', userStore.role)
+    const res = await getAnnouncementList()
     tableData.value = res.data?.announcementList || []
   } catch (err) {
     console.error(err)
@@ -50,7 +51,7 @@ async function loadData() {
 }
 
 function goDetail(row) {
-  router.push(`/${userStore.role}/announcement/${row.id}`)
+  router.push(`/${userStore.role}/system-announcement/${row.id}`)
 }
 
 onMounted(loadData)

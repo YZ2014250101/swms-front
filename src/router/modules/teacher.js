@@ -1,7 +1,7 @@
 // src/router/modules/teacher.js
 // 教师端路由
 import AppLayout from '@/components/layout/AppLayout.vue'
-import { commonChildren } from './common'
+import { getCommonChildren } from './common'
 
 const teacherRoutes = [
   {
@@ -90,7 +90,7 @@ const teacherRoutes = [
         meta: { title: '发布公告', roles: ['teacher'] }
       },
       // 公共页面
-      ...commonChildren
+      ...getCommonChildren()
     ]
   }
 ]

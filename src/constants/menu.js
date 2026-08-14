@@ -182,7 +182,7 @@ export const commonMenu = [
     icon: 'ChatDotRound',
     children: [
       { title: '消息通知', path: 'notice' },
-      { title: '系统公告', path: 'announcement' }
+      { title: '系统公告', path: 'system-announcement' }
     ]
   }
 ]

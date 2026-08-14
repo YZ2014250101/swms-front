@@ -9,14 +9,9 @@ import request from '../../request'
  * 按角色获取公告列表
  * @param {string} role student/teacher/admin
  */
-export function getAnnouncementList(role) {
-  const urlMap = {
-    student: '/student/announcementList',
-    teacher: '/teacher/myAnnouncementList',
-    admin: '/admin/announcementList'
-  }
+export function getAnnouncementList() {
   return request({
-    url: urlMap[role],
+    url: '/common/announcement/list',
     method: 'get'
   })
 }

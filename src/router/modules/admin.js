@@ -1,7 +1,7 @@
 // src/router/modules/admin.js
 // 管理员端路由
 import AppLayout from '@/components/layout/AppLayout.vue'
-import { commonChildren } from './common'
+import { getCommonChildren } from './common'
 
 const adminRoutes = [
   {
@@ -109,7 +109,7 @@ const adminRoutes = [
         meta: { title: '系统设置', roles: ['admin'] }
       },
       // 公共页面
-      ...commonChildren
+      ...getCommonChildren()
     ]
   }
 ]

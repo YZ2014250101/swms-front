@@ -1,7 +1,7 @@
 // src/router/modules/student.js
 // 学生端路由
 import AppLayout from '@/components/layout/AppLayout.vue'
-import { commonChildren } from './common'
+import { getCommonChildren } from './common'
 
 const studentRoutes = [
   {
@@ -22,13 +22,6 @@ const studentRoutes = [
         name: 'StudentMyInfo',
         component: () => import('@/views/student/MyInfo.vue'),
         meta: { title: '个人信息', roles: ['student'] }
-      },
-      // 修改密码（对接后端 /student/passwordPassword）
-      {
-        path: 'password',
-        name: 'StudentPassword',
-        component: () => import('@/views/common/Password.vue'),
-        meta: { title: '修改密码', roles: ['student'] }
       },
       // 选课管理
       {
@@ -103,7 +96,7 @@ const studentRoutes = [
         meta: { title: '考试安排', roles: ['student'] }
       },
       // 公共页面
-      ...commonChildren
+      ...getCommonChildren()
     ]
   }
 ]
