@@ -1,108 +1,144 @@
-<!-- src/views/MyInfo.vue -->
+<!-- src/views/student/MyInfo.vue -->
+<!-- 学生个人信息：对接后端 GET /student/myInfo，返回 Result<Student> -->
 <template>
-  <div class="container">
-    <h2>👤 个人信息</h2>
+  <div class="my-info-page">
+    <el-card shadow="never" v-loading="loading">
+      <template #header>
+        <div class="card-header">
+          <span>👤 个人信息</span>
+          <el-button type="primary" text :icon="Edit" @click="handleEdit">编辑</el-button>
+        </div>
+      </template>
 
-    <!-- 加载中提示 -->
-    <div v-if="loading" class="loading">正在加载个人信息...</div>
-    <!-- 错误提示 -->
-    <div v-else-if="errorMsg" class="error">{{ errorMsg }}</div>
-    <!-- 正常渲染信息 -->
-    <div v-else>
-      <div class="info-item">学号：{{ student.studentId }}</div>
-      <div class="info-item">姓名：{{ student.name }}</div>
-      <div class="info-item">性别：{{ student.gender }}</div>
-      <div class="info-item">专业：{{ student.major }}</div>
-    </div>
+      <!-- 错误提示 -->
+      <el-alert
+        v-if="errorMsg"
+        :title="errorMsg"
+        type="error"
+        show-icon
+        :closable="false"
+        style="margin-bottom: 16px"
+      />
+
+      <!-- 信息展示 -->
+      <el-descriptions v-else :column="2" border>
+        <el-descriptions-item label="学号">{{ student.studentId }}</el-descriptions-item>
+        <el-descriptions-item label="姓名">{{ student.name }}</el-descriptions-item>
+        <el-descriptions-item label="性别">{{ student.gender }}</el-descriptions-item>
+        <el-descriptions-item label="专业">{{ student.major }}</el-descriptions-item>
+      </el-descriptions>
+    </el-card>
+
+    <!-- 编辑弹窗 -->
+    <el-dialog v-model="editVisible" title="编辑个人信息" width="480px">
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
+        <el-form-item label="学号">
+          <el-input v-model="form.studentId" disabled />
+        </el-form-item>
+        <el-form-item label="姓名" prop="name">
+          <el-input v-model="form.name" />
+        </el-form-item>
+        <el-form-item label="性别" prop="gender">
+          <el-radio-group v-model="form.gender">
+            <el-radio value="男">男</el-radio>
+            <el-radio value="女">女</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="专业" prop="major">
+          <el-input v-model="form.major" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="editVisible = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="handleSave">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-// 引入Vue响应式API
-import { ref, onMounted } from 'vue'
-// 引入axios（需提前安装：npm install axios）
-import axios from 'axios'
+import { ref, reactive, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
+import { Edit } from '@element-plus/icons-vue'
+import { getStudentInfo, updateStudentInfo } from '@/api/modules/student/info'
 
-// 1. 定义响应式数据
-// 学生信息初始空对象
+// 学生信息
 const student = ref({
   studentId: '',
   name: '',
   gender: '',
   major: ''
 })
-// 加载状态
 const loading = ref(false)
-// 错误信息
 const errorMsg = ref('')
 
-// 2. 封装获取个人信息的接口函数
-const getStudentInfo = async () => {
+// 编辑相关
+const editVisible = ref(false)
+const saving = ref(false)
+const formRef = ref()
+const form = reactive({
+  studentId: '',
+  name: '',
+  gender: '',
+  major: ''
+})
+const rules = {
+  name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
+  gender: [{ required: true, message: '请选择性别', trigger: 'change' }],
+  major: [{ required: true, message: '请输入专业', trigger: 'blur' }]
+}
+
+// 获取学生个人信息（对接后端 /student/myInfo）
+const getStudentInfoData = async () => {
   loading.value = true
   errorMsg.value = ''
   try {
-    // 后端接口地址，替换为你的真实接口
-    // 示例：GET /api/student/getMyInfo，请求头携带token鉴权
-    const res = await axios.get('/api/student/myInfo', {
-      headers: {
-        // 从本地存储取出登录时保存的token
-        Authorization: `Bearer ${localStorage.getItem('token')}`
-      }
-    })
-    // 判断后端返回成功（按照你的Result统一返回格式 code=200）
-    if (res.data.code === 200) {
-      // 赋值给响应式变量
-      student.value = res.data.data
-    } else {
-      // 后端业务异常提示
-      errorMsg.value = res.data.msg || '获取个人信息失败'
-    }
+    // request.js 已统一携带 token，返回 { code, data, message }
+    const res = await getStudentInfo()
+    student.value = res.data || {}
   } catch (err) {
-    // 网络/服务器报错捕获
     console.error('请求个人信息接口异常：', err)
-    errorMsg.value = '服务器请求异常，请稍后重试'
+    errorMsg.value = '获取个人信息失败，请检查后端接口 /student/myInfo'
   } finally {
-    // 无论成功失败，关闭加载状态
     loading.value = false
   }
 }
 
-// 3. 页面挂载完成自动调用接口
+// 打开编辑弹窗
+function handleEdit() {
+  Object.assign(form, student.value)
+  editVisible.value = true
+}
+
+// 保存修改
+async function handleSave() {
+  if (!formRef.value) return
+  await formRef.value.validate(async (valid) => {
+    if (!valid) return
+    saving.value = true
+    try {
+      // TODO: 对接后端 PUT /student/myInfo（如后端暂未提供修改接口，可注释此行）
+      await updateStudentInfo(form)
+      student.value = { ...form }
+      editVisible.value = false
+      ElMessage.success('保存成功')
+    } catch (err) {
+      console.error(err)
+    } finally {
+      saving.value = false
+    }
+  })
+}
+
 onMounted(() => {
-  getStudentInfo()
+  getStudentInfoData()
 })
 </script>
 
 <style scoped>
-.container {
-  width: 600px;
-  margin: 30px auto;
-  padding: 20px;
-  border: 1px solid #eee;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-
-h2 {
-  border-bottom: 1px solid #eee;
-  padding-bottom: 10px;
-  margin-top: 0;
-  color: #333;
-}
-
-.info-item {
-  font-size: 16px;
-  line-height: 2.2;
-  color: #444;
-}
-
-.loading {
-  color: #666;
-  padding: 20px 0;
-}
-
-.error {
-  color: #f56c6c;
-  padding: 20px 0;
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 </style>

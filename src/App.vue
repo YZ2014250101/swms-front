@@ -1,33 +1,14 @@
 <template>
-  <!-- 顶部导航菜单 -->
-  <nav class="nav-bar">
-    <!-- router-link 代替a标签，点击不会整页刷新 -->
-    <router-link to="/info">个人信息</router-link>
-    <router-link to="/schedule">我的课表</router-link>
-  </nav>
-
-  <!-- 路由出口：匹配到的页面在这里渲染 -->
-  <router-view></router-view>
+  <!-- 根组件：仅承载路由出口，布局由各端 Layout 组件负责 -->
+  <router-view />
 </template>
 
 <script setup>
-// 无需写代码
+// 根组件无需额外逻辑
 </script>
 
-<style scoped>
-.nav-bar {
-  background-color: #165DFF;
-  padding: 16px 30px;
-  display: flex;
-  gap: 30px;
-}
-.nav-bar a {
-  color: #fff;
-  text-decoration: none;
-  font-size: 16px;
-}
-/* 当前激活的菜单高亮 */
-.nav-bar a.router-link-active {
-  border-bottom: 3px solid #fff;
+<style>
+#app {
+  width: 100%;
 }
 </style>
