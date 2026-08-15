@@ -76,7 +76,6 @@ const loadAttendance = async () => {
   try {
     const res = await getAttendanceStats()
     const data = res?.data ?? {}
-    
     courseStats.value = data.courseStats || []
   } catch (err) {
     console.error('获取考勤统计失败', err)

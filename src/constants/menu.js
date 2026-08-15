@@ -62,7 +62,7 @@ export const teacherMenu = [
     title: '个人中心',
     icon: 'UserFilled',
     children: [
-      { title: '个人信息', path: '/teacher/profile' },
+      { title: '个人信息', path: '/teacher/my-info' },
       { title: '修改密码', path: '/teacher/password' }
     ]
   },
@@ -172,6 +172,11 @@ export const adminMenu = [
     title: '系统设置',
     icon: 'Setting',
     children: [{ title: '系统设置', path: '/admin/settings' }]
+  },
+  {
+    title: 'AI助手',
+    icon: 'Service',
+    children: [{ title: 'AI助手', path: '/admin/ai' }]
   }
 ]
 

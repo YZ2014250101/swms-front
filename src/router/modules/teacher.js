@@ -16,6 +16,13 @@ const teacherRoutes = [
         component: () => import('@/views/teacher/Index.vue'),
         meta: { title: '首页', roles: ['teacher'] }
       },
+      // 个人信息（对接后端 /teacher/myInfo）
+      {
+        path: 'my-info',
+        name: 'TeacherMyInfo',
+        component: () => import('@/views/teacher/MyInfo.vue'),
+        meta: { title: '个人信息', roles: ['teacher'] }
+      },
       // 授课管理
       {
         path: 'my-courses',

@@ -108,6 +108,13 @@ const adminRoutes = [
         component: () => import('@/views/admin/SystemSettings.vue'),
         meta: { title: '系统设置', roles: ['admin'] }
       },
+      // AI对话
+      {
+        path: 'ai',
+        name: 'AdminAi',
+        component: () => import('@/views/admin/AiChat.vue'),
+        meta: { title: 'AI对话', roles: ['admin'] }
+      },
       // 公共页面
       ...getCommonChildren()
     ]
