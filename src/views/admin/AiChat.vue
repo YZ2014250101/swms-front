@@ -164,6 +164,7 @@ function newSession() {
     ElMessage.warning('正在回复中，请稍候')
     return
   }
+  
   currentSessionId.value = 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)
   chatList.value = []
   dialogMessage.value = ''
