@@ -30,6 +30,8 @@ const service = axios.create({
 service.interceptors.request.use(
   (config) => {
     const token = getToken()
+    //====新增调试打印====
+    console.log('👉请求拦截执行，url:', config.url, 'token存在:', !!token)
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`
     }
