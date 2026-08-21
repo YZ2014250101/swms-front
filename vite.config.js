@@ -12,6 +12,8 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    allowedHosts: true,
+    host: '0.0.0.0',
     proxy: {
       // SpringBoot 8080，继续用 /api，axios request正常工作
       '/api': {

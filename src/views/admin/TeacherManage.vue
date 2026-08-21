@@ -120,7 +120,7 @@ const fetchList = async () => {
   loading.value = true
   try {
     const res = await getTeacherList()
-    tableData.value = res.data.teacherList || []
+    tableData.value = res.data.teaList || []
   } catch (e) {
     // 拦截器已提示
   } finally {
