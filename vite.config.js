@@ -12,7 +12,7 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    allowedHosts: true,
+    allowedHosts: ['6db2883d.r11.cpolar.top'],
     host: '0.0.0.0',
     proxy: {
       // SpringBoot 8080，继续用 /api，axios request正常工作
