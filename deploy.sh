@@ -26,7 +26,8 @@ echo "4. 切换 npm 国内源..."
 npm config set registry https://registry.npmmirror.com
 
 echo "5. 安装依赖..."
-# 加上 --no-audit 减少网络请求，加快速度
+# 切回前端项目目录！
+cd /home/workspace/deployments/swms-front
 npm install --no-audit
 
 echo "6. 启动..."
