@@ -8,12 +8,12 @@ sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list
 apt-get update
 apt-get install -y curl xz-utils
 
-echo "2. 直接从清华镜像下载 Node.js 20 二进制包..."
-# 避免使用 apt 源和 NodeSource，直接下压缩包解压，又快又稳
+echo "2. 从 npmmirror 下载 Node.js 20 二进制包..."
 cd /tmp
-curl -fsSL https://mirrors.tuna.tsinghua.edu.cn/nodejs-release/v20.18.0/node-v20.18.0-linux-x64.tar.xz -o node.tar.xz
+rm -f node.tar.xz
+# 换成淘宝的二进制镜像，避开清华源的 403 拦截
+curl -fsSL https://registry.npmmirror.com/-/binary/node/v20.18.0/node-v20.18.0-linux-x64.tar.xz -o node.tar.xz
 tar -xf node.tar.xz
-# 把 node 和 npm 链接到系统路径里
 ln -sf /tmp/node-v20.18.0-linux-x64/bin/node /usr/local/bin/node
 ln -sf /tmp/node-v20.18.0-linux-x64/bin/npm /usr/local/bin/npm
 ln -sf /tmp/node-v20.18.0-linux-x64/bin/npx /usr/local/bin/npx
