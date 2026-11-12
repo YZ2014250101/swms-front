@@ -29,6 +29,10 @@ echo "5. 安装依赖..."
 # 切回前端项目目录！
 cd /home/workspace/deployments/swms-front
 npm install --no-audit
+# 2. 强制补装 Linux 专用的 Rolldown 绑定包
+# 版本号需要和你的 rolldown 版本匹配，日志里显示是 1.2.3
+npm install @rolldown/binding-linux-x64-gnu@1.2.3 --no-save --no-audit
+
 
 echo "6. 启动..."
 exec npm run dev -- --host 0.0.0.0
