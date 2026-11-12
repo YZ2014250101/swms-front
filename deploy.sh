@@ -31,5 +31,4 @@ cd /home/workspace/deployments/swms-front
 npm install --no-audit
 
 echo "6. 启动..."
-# 注意：必须在前台运行，不能放到后台，否则容器会以为脚本结束而退出
-exec npm run dev
+exec npm run dev -- --host 0.0.0.0
