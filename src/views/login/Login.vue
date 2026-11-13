@@ -3,7 +3,7 @@
 <template>
   <div class="login-container">
     <div class="login-card">
-      <h2 class="login-title">test5教务管理系统</h2>
+      <h2 class="login-title">test6教务管理系统</h2>
       <p class="login-subtitle">Student Work Management System</p>
 
       <el-form ref="loginFormRef" :model="form" :rules="rules" size="large">
